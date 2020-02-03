@@ -20,94 +20,6 @@ random.seed(0)
 # different optimizer
 # different feature extraction
 
-
-def calculate_loss(model, device, loss_fn, X, y):
-    inp = torch.Tensor(X).unsqueeze(0).unsqueeze(0)
-    gt = torch.LongTensor(y)
-    pred = model(inp).permute(1, 0, 2)
-    inp_lens = torch.IntTensor([pred.size()[0]])
-    gt_lens = torch.IntTensor([gt.size()[0]])
-    return loss_fn(pred, gt, inp_lens, gt_lens), pred
-
-
-def predict_glosses(model, device, X):
-    inp = torch.Tensor(X).unsqueeze(1).to(device)
-    pred = model(inp)
-    out = pred.squeeze().cpu().numpy().argmax(axis=1)
-    return pred
-
-
-def get_split_wer(model, device, X, y, vocab, batch_size=16):
-    hypes = []
-    gts = []
-    model.eval()
-    with torch.no_grad():
-        X_batches, y_batches = split_batches(X, y, batch_size, concat_targets=True)
-
-        for idx in range(len(X_batches)):
-            X_batch, y_batch = X_batches[idx], y_batches[idx]
-
-            pred = predict_glosses(model, device, X_batch)
-
-            gt = " ".join([x for x in vocab.decode(y[idx]) if x != "-"])
-
-            glosses = vocab.decode(out)
-            hyp = []
-            for i in range(len(glosses)):
-                if glosses[i] == '-' or (i > 0 and glosses[i] == glosses[i - 1]):
-                    continue
-
-                hyp.append(glosses[i])
-
-            hypes.append(" ".join(hyp))
-            gts.append(gt)
-
-    return wer(gts, hypes)
-
-
-def train(model, device, vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, optimizer, n_epochs, batch_size):
-    scheduler = ReduceLROnPlateau(optimizer, verbose=True, patience=5)
-
-    loss_fn = nn.CTCLoss(blank=0, reduction='none')
-
-    best_dev_wer = get_split_wer(model, device, X_dev, y_dev, vocab)
-    print("DEV WER:", best_dev_wer)
-    for epoch in range(1, n_epochs + 1):
-        print("Epoch", epoch)
-        start_time = time.time()
-        tr_losses = []
-        model.train()
-        X_batches, y_batches = split_batches(X_tr, y_tr, batch_size, concat_targets=True)
-        for idx in range(len(X_batches)):
-            optimizer.zero_grad()
-            X_batch, y_batch = X_batches[idx], y_batches[idx]
-
-            loss, _ = calculate_loss(model, device, loss_fn, X_batch, y_batch)
-            tr_losses.append(loss.item())
-
-            loss.backward()
-            optimizer.step()
-
-            if idx % 10 == 0:
-                print_progress(idx + 1, len(y_tr), start_time)
-
-        print()
-        dev_wer = get_split_wer(model, device, loss_fn, X_dev, y_dev, vocab)
-
-        if dev_wer < best_dev_wer:
-            test_wer = get_split_wer(model, device, loss_fn, X_test, y_test, vocab)
-            dev_wer = best_dev_wer
-            torch.save(model.state_dict(), os.sep.join([WEIGHTS_DIR, "slr.pt"]))
-            print("Model Saved", "TEST WER:", test_wer)
-
-        if scheduler:
-            scheduler.step(dev_wer)
-
-        print("DEV WER:", dev_wer)
-        print()
-        print()
-
-
 def split_batches(X, y, max_batch_size, shuffle=True, concat_targets=False):
     len_table = dict()
 
@@ -128,6 +40,7 @@ def split_batches(X, y, max_batch_size, shuffle=True, concat_targets=False):
 
     for l in lenghts:
         idxs = len_table[l]
+
         if shuffle:
             random.shuffle(idxs)
 
@@ -156,6 +69,108 @@ def split_batches(X, y, max_batch_size, shuffle=True, concat_targets=False):
     return X_batches, y_batches
 
 
+def predict_glosses(model, device, vocab, X):
+    # Takes only batches now
+    inp = torch.Tensor(X).unsqueeze(1).to(device)
+    preds = model(inp).squeeze(1).cpu().numpy().argmax(axis=2)
+
+    sentences = vocab.decode_batch(preds)
+    out = []
+    for sentence in sentences:
+        hyp = []
+        for i in range(len(sentence)):
+            if sentence[i] == '-' or (i > 0 and sentence[i] == sentence[i - 1]):
+                continue
+
+            hyp.append(sentence[i])
+
+        out.append(" ".join(hyp))
+
+    return out
+
+
+def get_split_wer(model, device, X, y, vocab, batch_size=16):
+    hypes = []
+    gts = []
+    model.eval()
+    with torch.no_grad():
+        X_batches, y_batches = split_batches(X, y, batch_size, concat_targets=False)
+
+        for idx in range(len(X_batches)):
+            X_batch, y_batch = X_batches[idx], y_batches[idx]
+
+            out = predict_glosses(model, device, vocab, X_batch)
+
+
+
+            gt = vocab.decode_batch(y_batch)
+
+            hypes += out
+
+            gts += gt
+
+    return wer(gts, hypes)
+
+
+def train(model, device, vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, optimizer, n_epochs, batch_size):
+    scheduler = ReduceLROnPlateau(optimizer, verbose=True, patience=5)
+
+    loss_fn = nn.CTCLoss()
+
+    best_dev_wer = get_split_wer(model, device, X_dev, y_dev, vocab)
+    print("DEV WER:", best_dev_wer)
+    for epoch in range(1, n_epochs + 1):
+        print("Epoch", epoch)
+        start_time = time.time()
+        tr_losses = []
+        model.train()
+        X_batches, y_batches = split_batches(X_tr, y_tr, batch_size, concat_targets=True)
+        for idx in range(len(X_batches)):
+            optimizer.zero_grad()
+
+            X_batch, y_batch = X_batches[idx], y_batches[idx]
+
+            inp = torch.Tensor(X_batch).unsqueeze(1).to(device)
+            pred = model(inp).permute(1, 0, 2)
+
+            T, N, V = pred.shape
+
+            gt = torch.LongTensor(y_batch[0])
+            inp_lens = torch.full(size=(N,), fill_value=T, dtype=torch.int32)
+            gt_lens = torch.IntTensor(y_batch[1])
+
+            loss = loss_fn(pred, gt, inp_lens, gt_lens)
+
+
+            # loss_batch = loss.detach().cpu().numpy()
+            # tr_losses += [x for x in loss_batch]
+
+            tr_losses.append(loss.item())
+
+            loss.backward()
+            optimizer.step()
+
+            if idx % 10 == 0:
+                print_progress(idx + 1, len(y_batches), start_time)
+
+        print()
+        print("Train Loss:", np.mean(tr_losses))
+
+        dev_wer = get_split_wer(model, device, X_dev, y_dev, vocab)
+        print("DEV WER:", dev_wer)
+        if dev_wer < best_dev_wer:
+            test_wer = get_split_wer(model, device, X_test, y_test, vocab)
+            best_dev_wer = dev_wer
+            torch.save(model.state_dict(), os.sep.join([WEIGHTS_DIR, "slr.pt"]))
+            print("Model Saved", "TEST WER:", test_wer)
+
+        if scheduler:
+            scheduler.step(dev_wer)
+
+        print()
+        print()
+
+
 if __name__ == "__main__":
     vocab = Vocab(source="pheonix")
     X_tr, y_tr = read_pheonix("train", vocab, save=True)
@@ -175,7 +190,8 @@ if __name__ == "__main__":
     lr = 0.01
     weight_decay = 1e-5
     momentum = 0.9
-    optimizer = SGD(model.parameters(), lr=lr, nesterov=True,
-                    weight_decay=weight_decay, momentum=momentum)
-
+    # optimizer = SGD(model.parameters(), lr=lr, nesterov=True, weight_decay=weight_decay, momentum=momentum)
+    optimizer = Adam(model.parameters(), lr=lr)
     train(model, device, vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, optimizer, n_epochs=10, batch_size=8)
+
+    # y_tr
