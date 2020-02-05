@@ -63,7 +63,7 @@ class SLR(nn.Module):
     def forward(self, x):
         x = self.temp_fusion(x)
         x = self.seq_model(x)
-        return x.log_softmax(dim=2)
+        return x
 
 
 def weights_init(m):

@@ -1,8 +1,9 @@
 import time
-import numpy as np
 import torch
+import ctcdecode
 import torch.nn as nn
-from torch.optim import SGD, Adam
+import numpy as np
+from torch.optim import RMSprop
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from jiwer import wer
 from numpy import random
@@ -13,11 +14,16 @@ from config import *
 
 random.seed(0)
 
+torch.backends.cudnn.deterministic = True
+
 
 # TODO
-# batch train/val
 # debug from CRNN
-# different optimizer
+# try tensorflow version ctcloss
+# try warp-ctc with pytorch 0.4
+# cnn-hmm
+# ctcdecode
+# permutations
 # different feature extraction
 
 def split_batches(X, y, max_batch_size, shuffle=True, concat_targets=False):
@@ -69,22 +75,21 @@ def split_batches(X, y, max_batch_size, shuffle=True, concat_targets=False):
     return X_batches, y_batches
 
 
-def predict_glosses(model, device, vocab, X):
+def predict_glosses(model, device, X, vocab, decoder):
     # Takes only batches now
     inp = torch.Tensor(X).unsqueeze(1).to(device)
-    preds = model(inp).squeeze(1).cpu().numpy().argmax(axis=2)
-
-    sentences = vocab.decode_batch(preds)
+    preds = model(inp).log_softmax(dim=2)
     out = []
-    for sentence in sentences:
-        hyp = []
-        for i in range(len(sentence)):
-            if sentence[i] == '-' or (i > 0 and sentence[i] == sentence[i - 1]):
-                continue
+    # preds = predslog_softmax(dim=2).cpu().numpy()
+    # for pred in preds:
+    #     a = BeamSearch.ctcBeamSearch(pred, vocab.idx2gloss[1:], None, beamWidth=10)
+    #     out.append(a)
 
-            hyp.append(sentence[i])
+    beam_result, beam_scores, timesteps, out_seq_len = decoder.decode(preds)
+    for i in range(preds.size(0)):
+        hypo = beam_result[i][0][:out_seq_len[i][0]]
 
-        out.append(" ".join(hyp))
+        out.append(" ".join([vocab.idx2gloss[x] for x in hypo]))
 
     return out
 
@@ -93,22 +98,24 @@ def get_split_wer(model, device, X, y, vocab, batch_size=16):
     hypes = []
     gts = []
     model.eval()
+    decoder = ctcdecode.CTCBeamDecoder(vocab.idx2gloss, beam_width=20,
+                                       blank_id=0, log_probs_input=True)
+
     with torch.no_grad():
         X_batches, y_batches = split_batches(X, y, batch_size, concat_targets=False)
 
         for idx in range(len(X_batches)):
             X_batch, y_batch = X_batches[idx], y_batches[idx]
 
-            out = predict_glosses(model, device, vocab, X_batch)
+            out = predict_glosses(model, device, X_batch, vocab, decoder)
 
+            gt_batch = [" ".join(gt) for gt in vocab.decode_batch(y_batch)]
 
-
-            gt = vocab.decode_batch(y_batch)
+            gts += gt_batch
 
             hypes += out
 
-            gts += gt
-
+    print("EXAMPLE: [", gts[200], "], [", hypes[200], "]")
     return wer(gts, hypes)
 
 
@@ -131,7 +138,7 @@ def train(model, device, vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, optimi
             X_batch, y_batch = X_batches[idx], y_batches[idx]
 
             inp = torch.Tensor(X_batch).unsqueeze(1).to(device)
-            pred = model(inp).permute(1, 0, 2)
+            pred = model(inp).permute(1, 0, 2).log_softmax(dim=2)
 
             T, N, V = pred.shape
 
@@ -140,7 +147,6 @@ def train(model, device, vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, optimi
             gt_lens = torch.IntTensor(y_batch[1])
 
             loss = loss_fn(pred, gt, inp_lens, gt_lens)
-
 
             # loss_batch = loss.detach().cpu().numpy()
             # tr_losses += [x for x in loss_batch]
@@ -159,13 +165,14 @@ def train(model, device, vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, optimi
         dev_wer = get_split_wer(model, device, X_dev, y_dev, vocab)
         print("DEV WER:", dev_wer)
         if dev_wer < best_dev_wer:
-            test_wer = get_split_wer(model, device, X_test, y_test, vocab)
+            # test_wer = get_split_wer(model, device, X_test, y_test, vocab)
+            test_wer = dev_wer
             best_dev_wer = dev_wer
             torch.save(model.state_dict(), os.sep.join([WEIGHTS_DIR, "slr.pt"]))
             print("Model Saved", "TEST WER:", test_wer)
 
-        if scheduler:
-            scheduler.step(dev_wer)
+        # if scheduler:
+        #     scheduler.step(dev_wer)
 
         print()
         print()
@@ -187,11 +194,10 @@ if __name__ == "__main__":
     else:
         model.apply(weights_init)
 
-    lr = 0.01
-    weight_decay = 1e-5
-    momentum = 0.9
-    # optimizer = SGD(model.parameters(), lr=lr, nesterov=True, weight_decay=weight_decay, momentum=momentum)
-    optimizer = Adam(model.parameters(), lr=lr)
-    train(model, device, vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, optimizer, n_epochs=10, batch_size=8)
+    lr = 0.001
+    # optimizer = SGD(model.parameters(), lr=lr, nesterov=True)
+    optimizer = RMSprop(model.parameters(), lr=lr)
+    # optimizer = Adam(model.parameters(), lr=lr)
+    train(model, device, vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, optimizer, n_epochs=10, batch_size=32)
 
     # y_tr

@@ -26,8 +26,6 @@ def generate_split(model, device, preprocess, split):
                 continue
 
             feat_dir = os.path.split(feat_file)[0]
-            if not os.path.exists(feat_dir):
-                os.makedirs(feat_dir)
 
             image_files = list(glob.glob(img_dir))
             images = [Image.open(img_file) for img_file in image_files]
@@ -35,6 +33,9 @@ def generate_split(model, device, preprocess, split):
             inp = inp.to(device)
 
             feats = model(inp).cpu().numpy()
+
+            if not os.path.exists(feat_dir):
+                os.makedirs(feat_dir)
             np.save(feat_file, feats)
 
             if idx % 10 == 0:
@@ -52,9 +53,13 @@ if __name__ == "__main__":
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
-    else:
-        preprocess = None
+    elif FRAME_FEAT_MODEL == "inceptionv3":
+        preprocess = transforms.Compose([
+            transforms.Resize(299),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
 
     generate_split(model, device, preprocess, "train")
-    generate_split(model, device, preprocess, "test")
-    generate_split(model, device, preprocess, "dev")
+    # generate_split(model, device, preprocess, "test")
+    # generate_split(model, device, preprocess, "dev")
