@@ -22,7 +22,6 @@ torch.backends.cudnn.deterministic = True
 # try tensorflow version ctcloss
 # try warp-ctc with pytorch 0.4
 # cnn-hmm
-# ctcdecode
 # permutations
 # different feature extraction
 
@@ -80,16 +79,23 @@ def predict_glosses(model, device, X, vocab, decoder):
     inp = torch.Tensor(X).unsqueeze(1).to(device)
     preds = model(inp).log_softmax(dim=2)
     out = []
-    # preds = predslog_softmax(dim=2).cpu().numpy()
-    # for pred in preds:
-    #     a = BeamSearch.ctcBeamSearch(pred, vocab.idx2gloss[1:], None, beamWidth=10)
-    #     out.append(a)
+    preds = preds.argmax(dim=2).cpu().numpy()
 
-    beam_result, beam_scores, timesteps, out_seq_len = decoder.decode(preds)
-    for i in range(preds.size(0)):
-        hypo = beam_result[i][0][:out_seq_len[i][0]]
+    glosses_batch = vocab.decode_batch(preds)
+    for glosses in glosses_batch:
+        hypo = []
+        for idx, gloss in enumerate(glosses):
+            if gloss == '-' or (idx > 0 and glosses[idx] == glosses[idx - 1]):
+                continue
+            hypo.append(gloss)
 
-        out.append(" ".join([vocab.idx2gloss[x] for x in hypo]))
+        out.append(" ".join(hypo))
+
+    # beam_result, beam_scores, timesteps, out_seq_len = decoder.decode(preds)
+    # for i in range(preds.size(0)):
+    #     hypo = beam_result[i][0][:out_seq_len[i][0]]
+    #
+    #     out.append(" ".join([vocab.idx2gloss[x] for x in hypo]))
 
     return out
 
@@ -102,7 +108,7 @@ def get_split_wer(model, device, X, y, vocab, batch_size=16):
                                        blank_id=0, log_probs_input=True)
 
     with torch.no_grad():
-        X_batches, y_batches = split_batches(X, y, batch_size, concat_targets=False)
+        X_batches, y_batches = split_batches(X, y, batch_size, concat_targets=False, shuffle=False)
 
         for idx in range(len(X_batches)):
             X_batch, y_batch = X_batches[idx], y_batches[idx]
@@ -115,7 +121,7 @@ def get_split_wer(model, device, X, y, vocab, batch_size=16):
 
             hypes += out
 
-    print("EXAMPLE: [", gts[200], "], [", hypes[200], "]")
+    print("EXAMPLE: [" + gts[200] + "]", "[" + hypes[200] + "]")
     return wer(gts, hypes)
 
 
@@ -142,7 +148,7 @@ def train(model, device, vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, optimi
 
             T, N, V = pred.shape
 
-            gt = torch.LongTensor(y_batch[0])
+            gt = torch.IntTensor(y_batch[0])
             inp_lens = torch.full(size=(N,), fill_value=T, dtype=torch.int32)
             gt_lens = torch.IntTensor(y_batch[1])
 
@@ -194,10 +200,10 @@ if __name__ == "__main__":
     else:
         model.apply(weights_init)
 
-    lr = 0.001
+    lr = 0.0001
     # optimizer = SGD(model.parameters(), lr=lr, nesterov=True)
     optimizer = RMSprop(model.parameters(), lr=lr)
     # optimizer = Adam(model.parameters(), lr=lr)
-    train(model, device, vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, optimizer, n_epochs=10, batch_size=32)
+    train(model, device, vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, optimizer, n_epochs=100, batch_size=8)
 
     # y_tr

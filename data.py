@@ -1,6 +1,7 @@
 import pandas as pd
 from utils import *
 from config import *
+import numpy as np
 import pickle
 
 
@@ -9,13 +10,48 @@ def get_pheonix_df(split):
     return pd.read_csv(path, sep='|')
 
 
-def read_pheonix(split, vocab, tensor=False, save=False):
-    if os.path.exists(os.sep.join([VARS_DIR, 'X_' + split + '.pkl'])) \
-            and os.path.exists(os.sep.join([VARS_DIR, 'y_' + split + '.pkl'])):
-        with open(os.sep.join([VARS_DIR, 'X_' + split + '.pkl']), 'rb') as f:
+def pad_image(feats, VIDEO_SEQ_LEN):
+    padded_feats = np.zeros((VIDEO_SEQ_LEN, feats.shape[1]))
+    L = feats.shape[0]
+    if L > VIDEO_SEQ_LEN:
+        step = L // VIDEO_SEQ_LEN
+        left_over = L % VIDEO_SEQ_LEN
+        start_idx = step // 2
+        start_idxs = []
+
+        for i in range(VIDEO_SEQ_LEN):
+            start_idxs.append(start_idx)
+
+            padded_feats[i] = feats[start_idx]
+            if np.random.rand() < left_over / VIDEO_SEQ_LEN and L - 1 > start_idx + step * (VIDEO_SEQ_LEN - i - 1):
+                start_idx += step + 1
+            else:
+                start_idx += step
+    else:
+        for i in range(VIDEO_SEQ_LEN):
+            if i < L:
+                padded_feats[i] = feats[i]
+            else:
+                padded_feats[i] = feats[L - 1]
+
+    return padded_feats
+
+
+def read_pheonix(split, vocab, save=False):
+    if VIDEO_SEQ_LEN:
+        suffix = "_" + split + "_" + str(VIDEO_SEQ_LEN) + ".pkl"
+    else:
+        suffix = "_" + split + ".pkl"
+
+    X_path = os.sep.join([VARS_DIR, 'X' + suffix])
+
+    y_path = os.sep.join([VARS_DIR, 'y' + suffix])
+
+    if os.path.exists(X_path) and os.path.exists(y_path):
+        with open(X_path, 'rb') as f:
             X = pickle.load(f)
 
-        with open(os.sep.join([VARS_DIR, 'y_' + split + '.pkl']), 'rb') as f:
+        with open(y_path, 'rb') as f:
             y = pickle.load(f)
 
         return X, y
@@ -30,10 +66,13 @@ def read_pheonix(split, vocab, tensor=False, save=False):
         text = row.annotation
         feat_path = os.sep.join([VIDEO_FEAT_DIR, split, row.folder]).replace("/*.png", ".npy")
         feats = np.load(feat_path)
-        vectors = vocab.encode(text)
+        if VIDEO_SEQ_LEN:
+            feats = pad_image(feats, VIDEO_SEQ_LEN)
 
-        if feats.shape[0] // 4 < len(vectors):
-            continue
+        vectors = vocab.encode(text)
+        if VIDEO_SEQ_LEN:
+            vectors = vectors[:MAX_OUT_LEN]
+
         X.append(feats)
         y.append(vectors)
 
@@ -43,10 +82,10 @@ def read_pheonix(split, vocab, tensor=False, save=False):
     print()
 
     if save:
-        with open(os.sep.join([VARS_DIR, 'X_' + split + '.pkl']), 'wb') as f:
+        with open(X_path, 'wb') as f:
             pickle.dump(X, f)
 
-        with open(os.sep.join([VARS_DIR, 'y_' + split + '.pkl']), 'wb') as f:
+        with open(y_path, 'wb') as f:
             pickle.dump(y, f)
 
     return X, y

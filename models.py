@@ -39,12 +39,28 @@ class TempFusion(nn.Module):
         x = self.pool2(x)
         return x.squeeze(1)
 
+class TempFusionFixedVL(nn.Module):
+    def __init__(self):
+        super(TempFusionFixedVL, self).__init__()
+
+        self.conv1d_1 = nn.Conv2d(1, 1, kernel_size=(5, 1))
+        self.pool1 = nn.MaxPool2d(kernel_size=(2, 1), stride=(2, 1))
+        self.conv1d_2 = nn.Conv2d(1, 1, kernel_size=(5, 1))
+        self.pool2 = nn.MaxPool2d(kernel_size=(2, 1), stride=(2, 1))
+
+    def forward(self, x):
+        x = self.conv1d_1(x)
+        x = self.pool1(x)
+        x = self.conv1d_2(x)
+        x = self.pool2(x)
+        return x.squeeze(1)
+
 
 class BiLSTM(nn.Module):
     def __init__(self, hidden_size, vocab_size):
         super(BiLSTM, self).__init__()
         self.hidden_size = hidden_size
-        self.lstm = nn.LSTM(input_size=FRAME_FEAT_SIZE, hidden_size=hidden_size, batch_first=True, bidirectional=True)
+        self.lstm = nn.LSTM(input_size=FRAME_FEAT_SIZE, hidden_size=hidden_size, num_layers=2, batch_first=True, bidirectional=True)
         self.emb = nn.Linear(hidden_size * 2, vocab_size)
 
     def forward(self, x):
@@ -55,9 +71,12 @@ class BiLSTM(nn.Module):
 
 class SLR(nn.Module):
 
-    def __init__(self, rnn_hidden, vocab_size):
+    def __init__(self, rnn_hidden, vocab_size, fixed_input_length=True):
         super(SLR, self).__init__()
-        self.temp_fusion = TempFusion()
+        if fixed_input_length:
+            self.temp_fusion = TempFusionFixedVL()
+        else:
+            self.temp_fusion = TempFusion()
         self.seq_model = BiLSTM(rnn_hidden, vocab_size)
 
     def forward(self, x):
@@ -89,10 +108,11 @@ if __name__ == "__main__":
     feat_file = feat_dir.replace("/*.png", ".npy")
 
     feats = np.load(feat_file)
-    inp = torch.stack([torch.Tensor(feats).unsqueeze(0), torch.Tensor(feats).unsqueeze(0)])
+    inp = torch.stack([torch.Tensor(feats[:100]).unsqueeze(0), torch.Tensor(feats[:100]).unsqueeze(0)])
+
     # inp = torch.rand([2, 1, 27, 1024])
 
-    slr = SLR(rnn_hidden=512)
+    slr = SLR(rnn_hidden=512, vocab_size=1232)
 
     out = slr(inp)
     print(inp.shape)
