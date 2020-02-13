@@ -18,7 +18,6 @@ def print_progress(cur_idx, L, start_time):
           + str(seconds) + " seconds left",
           end=" ")
 
-
 class Vocab(object):
     def __init__(self, source="pheonix"):
         self.idx2gloss = ["-"]

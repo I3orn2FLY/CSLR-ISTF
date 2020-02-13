@@ -14,10 +14,12 @@ class FrameFeatModel(nn.Module):
         super(FrameFeatModel, self).__init__()
         if FRAME_FEAT_MODEL == "densenet121":
             self.ffm = models.densenet121(pretrained=True)
-        else:
-            self.ffm = models.densenet121(pretrained=True)
+            self.ffm.classifier = Identity()
+        elif FRAME_FEAT_MODEL == "googlenet":
+            self.ffm = models.googlenet(pretrained=True)
+            self.ffm.fc = Identity()
 
-        self.ffm.classifier = Identity()
+
 
     def forward(self, x):
         return self.ffm(x)

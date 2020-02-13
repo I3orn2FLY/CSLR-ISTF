@@ -12,6 +12,7 @@ from utils import print_progress
 
 def generate_split(model, device, preprocess, split):
     df = pd.read_csv(os.sep.join([ANNO_DIR, "manual", split + ".corpus.csv"]), sep='|')
+
     print("Feature extraction:", split, "split")
     with torch.no_grad():
         L = df.shape[0]
@@ -31,7 +32,6 @@ def generate_split(model, device, preprocess, split):
             images = [Image.open(img_file) for img_file in image_files]
             inp = torch.stack([preprocess(image) for image in images])
             inp = inp.to(device)
-
             feats = model(inp).cpu().numpy()
 
             if not os.path.exists(feat_dir):
@@ -46,20 +46,16 @@ def generate_split(model, device, preprocess, split):
 
 if __name__ == "__main__":
     device = torch.device("cuda:0")
-    model = FrameFeatModel()
-    if FRAME_FEAT_MODEL == "densenet121":
-        preprocess = transforms.Compose([
-            transforms.Resize((224, 224)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ])
-    elif FRAME_FEAT_MODEL == "inceptionv3":
-        preprocess = transforms.Compose([
-            transforms.Resize(299),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ])
+    model = FrameFeatModel().to(device)
+    model.eval()
+
+    preprocess = transforms.Compose([
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
 
     generate_split(model, device, preprocess, "train")
-    # generate_split(model, device, preprocess, "test")
-    # generate_split(model, device, preprocess, "dev")
+    generate_split(model, device, preprocess, "test")
+    generate_split(model, device, preprocess, "dev")

@@ -22,6 +22,7 @@ torch.backends.cudnn.deterministic = True
 # try tensorflow version ctcloss
 # try warp-ctc with pytorch 0.4
 # cnn-hmm
+
 # permutations
 # different feature extraction
 
