@@ -17,6 +17,7 @@ def generate_split(model, device, preprocess, split):
     with torch.no_grad():
         L = df.shape[0]
         start_time = time.time()
+        rand_idx = int(np.random.rand() * L)
         for idx in range(L):
             row = df.iloc[idx]
             img_dir = os.sep.join([IMAGES_DIR, split, row.folder])
@@ -29,6 +30,16 @@ def generate_split(model, device, preprocess, split):
             feat_dir = os.path.split(feat_file)[0]
 
             image_files = list(glob.glob(img_dir))
+            image_files.sort()
+
+            # image_files = [os.path.split(img_file)[1] for img_file in image_files]
+            # if idx == rand_idx:
+            #     print()
+            #     for img_file in image_files:
+            #         print(img_file.split('.')[1].split('_')[-1])
+            #
+            #     exit()
+
             images = [Image.open(img_file) for img_file in image_files]
             inp = torch.stack([preprocess(image) for image in images])
             inp = inp.to(device)

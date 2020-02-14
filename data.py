@@ -1,8 +1,9 @@
 import pandas as pd
+import pickle
+import glob
+from numpy import random
 from utils import *
 from config import *
-import numpy as np
-import pickle
 
 
 def get_pheonix_df(split):
@@ -10,7 +11,7 @@ def get_pheonix_df(split):
     return pd.read_csv(path, sep='|')
 
 
-def pad_image(feats, VIDEO_SEQ_LEN):
+def pad_features(feats, VIDEO_SEQ_LEN):
     padded_feats = np.zeros((VIDEO_SEQ_LEN, feats.shape[1]))
     L = feats.shape[0]
     if L > VIDEO_SEQ_LEN:
@@ -37,11 +38,31 @@ def pad_image(feats, VIDEO_SEQ_LEN):
     return padded_feats
 
 
-def read_pheonix(split, vocab, save=False):
-    if VIDEO_SEQ_LEN:
-        suffix = "_" + split + "_" + str(VIDEO_SEQ_LEN) + ".pkl"
-    else:
-        suffix = "_" + split + ".pkl"
+def get_batches_vgg_s_pheonix(split, vocab, max_batch_size, shuffle):
+    df = get_pheonix_df(split)
+    X = []
+    y = []
+    for idx in range(df.shape[0]):
+        row = df.iloc[idx]
+        text = row.annotation
+        img_dir = os.sep.join([IMAGES_DIR, split, row.folder])
+
+        image_files = list(glob.glob(img_dir))
+        image_files.sort()
+
+        vectors = vocab.encode(text)
+
+        X.append(image_files)
+        y.append(vectors)
+
+    return split_batches(X, y, max_batch_size, shuffle, target_format=2)
+
+
+def read_pheonix(split, vocab, save=False, fix_shapes=False):
+    suffix = "_" + FRAME_FEAT_MODEL + "_" + split
+    if fix_shapes:
+        suffix += "_" + str(VIDEO_SEQ_LEN)
+    suffix += ".pkl"
 
     X_path = os.sep.join([VARS_DIR, 'X' + suffix])
 
@@ -66,12 +87,14 @@ def read_pheonix(split, vocab, save=False):
         text = row.annotation
         feat_path = os.sep.join([VIDEO_FEAT_DIR, split, row.folder]).replace("/*.png", ".npy")
         feats = np.load(feat_path)
-        if VIDEO_SEQ_LEN:
-            feats = pad_image(feats, VIDEO_SEQ_LEN)
+        if fix_shapes:
+            feats = pad_features(feats, VIDEO_SEQ_LEN)
 
         vectors = vocab.encode(text)
-        if VIDEO_SEQ_LEN:
+        if fix_shapes:
             vectors = vectors[:MAX_OUT_LEN]
+        elif split == "train" and len(vectors) > feats.shape[0] // 4:
+            continue
 
         X.append(feats)
         y.append(vectors)
@@ -89,6 +112,80 @@ def read_pheonix(split, vocab, save=False):
             pickle.dump(y, f)
 
     return X, y
+
+
+def split_batches(X, y, max_batch_size, shuffle=True, target_format=0):
+    # target format =>
+    # 0 - concatenate targets and return targets(list), target_lengths(list)
+    # 1 - pad targets and return targets (numpy matrix), target_lengths
+    # anything but 0 and 1 - return just targets
+
+    len_table = dict()
+
+    for idx, feats in enumerate(X):
+        l = len(feats)
+        if l in len_table:
+            len_table[l].append(idx)
+        else:
+            len_table[l] = [idx]
+
+    X_batches = []
+    y_batches = []
+
+    lenghts = list(len_table)
+
+    if shuffle:
+        random.shuffle(lenghts)
+
+    for l in lenghts:
+        idxs = len_table[l]
+
+        if shuffle:
+            random.shuffle(idxs)
+
+        s = 0
+        while (s < len(idxs)):
+            e = s + max_batch_size
+            if e > len(idxs):
+                e = len(idxs)
+
+            X_batches.append([X[i] for i in idxs[s:e]])
+            if target_format == 0:
+                # concatenated targets and lengths
+                y_batch = []
+                y_lengths = []
+                for idx in idxs[s:e]:
+                    y_batch += y[idx]
+                    y_lengths.append(len(y[idx]))
+
+                y_batch = (y_batch, y_lengths)
+            elif target_format == 1:
+                # padded targets and lengths
+                max_length = float("-inf")
+                y_lengths = []
+
+                for idx in idxs[s:e]:
+                    max_length = max(max_length, len(y[idx]))
+
+                y_batch = np.zeros((e - s, max_length))
+
+                for i, idx in enumerate(idxs[s:e]):
+                    for j in range(len(y[idx])):
+                        y_batch[i][j] = y[idx][j]
+
+                    y_lengths.append(len(y[idx]))
+
+                y_batch = (y_batch, y_lengths)
+
+            else:
+                # just targets
+                y_batch = [y[i] for i in idxs[s:e]]
+
+            y_batches.append(y_batch)
+
+            s += max_batch_size
+
+    return X_batches, y_batches
 
 
 if __name__ == "__main__":
