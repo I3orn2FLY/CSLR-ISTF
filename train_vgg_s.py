@@ -8,16 +8,14 @@ from torch.optim import RMSprop, Adam, SGD
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from numpy import random
 from models import SLR, weights_init
-from data import get_batches_vgg_s_pheonix
+from data import get_batches_vgg_s_pheonix, get_tensor_batch_vgg_s
 from train import predict_glosses
-
 from utils import Vocab, print_progress
 from config import *
 
 random.seed(0)
 
 torch.backends.cudnn.deterministic = True
-
 
 
 def get_split_wer(model, device, X_batches, y_batches, vocab, beam_search=False):
@@ -34,8 +32,8 @@ def get_split_wer(model, device, X_batches, y_batches, vocab, beam_search=False)
 
         for idx in range(len(X_batches)):
             X_batch, y_batch = X_batches[idx], y_batches[idx]
-            #TODO
-            inp = torch.Tensor(X_batch).unsqueeze(1).to(device)
+
+            inp = get_tensor_batch_vgg_s(X_batch).to(device)
             preds = model(inp).permute(1, 0, 2)
             out, out_idx = predict_glosses(preds, vocab, decoder)
 
@@ -58,21 +56,19 @@ def train(model, device, vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, optimi
     scheduler = ReduceLROnPlateau(optimizer, verbose=True, patience=5)
 
     loss_fn = nn.CTCLoss(zero_infinity=True)
-
-    best_dev_wer = get_split_wer(model, device, X_dev, y_dev, vocab)
-    print("DEV WER:", best_dev_wer)
+    best_train_loss = float("inf")
     for epoch in range(1, n_epochs + 1):
         print("Epoch", epoch)
         start_time = time.time()
         tr_losses = []
+
         model.train()
-        X_batches, y_batches = split_batches(X_tr, y_tr, batch_size, target_format=1)
-        for idx in range(len(X_batches)):
+        for idx in range(len(X_tr)):
             optimizer.zero_grad()
 
-            X_batch, y_batch = X_batches[idx], y_batches[idx]
+            X_batch, y_batch = X_tr[idx], y_tr[idx]
 
-            inp = torch.Tensor(X_batch).unsqueeze(1).to(device)
+            inp = get_tensor_batch_vgg_s(X_batch).to(device)
             pred = model(inp)
 
             T, N, V = pred.shape
@@ -86,30 +82,23 @@ def train(model, device, vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, optimi
             if torch.isnan(loss):
                 print("NAN!!")
 
-            # loss_batch = loss.detach().cpu().numpy()
-            # tr_losses += [x for x in loss_batch]
-
             tr_losses.append(loss.item())
 
             loss.backward()
             optimizer.step()
 
             if idx % 10 == 0:
-                print_progress(idx + 1, len(y_batches), start_time)
+                print_progress(idx + 1, len(y_tr), start_time)
 
         print()
-        if epoch % 5 == 0:
-            train_wer = get_split_wer(model, device, X_tr, y_tr, vocab)
-        print("Train Loss:", np.mean(tr_losses), "Train WER:", train_wer)
 
-        dev_wer = get_split_wer(model, device, X_dev, y_dev, vocab)
-        print("DEV WER:", dev_wer)
-        if dev_wer < best_dev_wer:
-            # test_wer = get_split_wer(model, device, X_test, y_test, vocab)
-            test_wer = dev_wer
-            best_dev_wer = dev_wer
+        train_loss = np.mean(tr_losses)
+        print("Train Loss:", train_loss)
+
+        if train_loss < best_train_loss:
+            best_train_loss = train_loss
             torch.save(model.state_dict(), os.sep.join([WEIGHTS_DIR, "slr.pt"]))
-            print("Model Saved", "TEST WER:", test_wer)
+            print("Model Saved")
 
         # if scheduler:
         #     scheduler.step(dev_wer)
@@ -120,16 +109,16 @@ def train(model, device, vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, optimi
 
 if __name__ == "__main__":
     vocab = Vocab(source="pheonix")
-    X_tr, y_tr = read_pheonix("train", vocab, save=True)
-    X_test, y_test = read_pheonix("test", vocab, save=True)
-    X_dev, y_dev = read_pheonix("dev", vocab, save=True)
+    X_tr, y_tr = get_batches_vgg_s_pheonix("train", vocab, max_batch_size=8, shuffle=True, target_format=1)
+    X_test, y_test = get_batches_vgg_s_pheonix("test", vocab, max_batch_size=8, shuffle=False)
+    X_dev, y_dev = get_batches_vgg_s_pheonix("dev", vocab, max_batch_size=8, shuffle=False)
     print()
 
     device = torch.device("cuda:0")
-    model = SLR(rnn_hidden=512, vocab_size=vocab.size).to(device)
-
-    if os.path.exists(os.sep.join([WEIGHTS_DIR, "slr.pt"])):
-        model.load_state_dict(torch.load(os.sep.join([WEIGHTS_DIR, "slr.pt"])))
+    model = SLR(rnn_hidden=512, vocab_size=vocab.size, temp_fusion_type=2).to(device)
+    load = False
+    if load and os.path.exists(os.sep.join([WEIGHTS_DIR, "slr_vgg_s.pt"])):
+        model.load_state_dict(torch.load(os.sep.join([WEIGHTS_DIR, "slr_vgg_s.pt"])))
         print("Model Loaded")
     else:
         model.apply(weights_init)
@@ -139,5 +128,3 @@ if __name__ == "__main__":
     # optimizer = RMSprop(model.parameters(), lr=lr)
     optimizer = Adam(model.parameters(), lr=lr)
     train(model, device, vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, optimizer, n_epochs=100, batch_size=8)
-
-
