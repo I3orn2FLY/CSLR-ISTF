@@ -69,7 +69,7 @@ def train(model, device, vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, optimi
             X_batch, y_batch = X_tr[idx], y_tr[idx]
 
             inp = get_tensor_batch_vgg_s(X_batch).to(device)
-            pred = model(inp)
+            pred = model(inp).log_softmax(dim=2)
 
             T, N, V = pred.shape
 
@@ -97,7 +97,7 @@ def train(model, device, vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, optimi
 
         if train_loss < best_train_loss:
             best_train_loss = train_loss
-            torch.save(model.state_dict(), os.sep.join([WEIGHTS_DIR, "slr.pt"]))
+            torch.save(model.state_dict(), os.sep.join([WEIGHTS_DIR, "slr_vgg_s.pt.pt"]))
             print("Model Saved")
 
         # if scheduler:
@@ -123,7 +123,7 @@ if __name__ == "__main__":
     else:
         model.apply(weights_init)
 
-    lr = 0.001
+    lr = 0.005
     # optimizer = SGD(model.parameters(), lr=lr, nesterov=True)
     # optimizer = RMSprop(model.parameters(), lr=lr)
     optimizer = Adam(model.parameters(), lr=lr)

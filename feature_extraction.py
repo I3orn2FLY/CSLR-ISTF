@@ -5,9 +5,12 @@ from PIL import Image
 import time
 import numpy as np
 import pandas as pd
-from models import FrameFeatModel
+from models import FrameFeatModel, SLR
 from config import *
 from utils import print_progress
+from data import split_batches, Vocab
+from data import read_pheonix
+import ctcdecode
 
 
 def generate_split(model, device, preprocess, split):
@@ -55,7 +58,7 @@ def generate_split(model, device, preprocess, split):
         print()
 
 
-if __name__ == "__main__":
+def extract_features():
     device = torch.device("cuda:0")
     model = FrameFeatModel().to(device)
     model.eval()
@@ -70,3 +73,32 @@ if __name__ == "__main__":
     generate_split(model, device, preprocess, "train")
     generate_split(model, device, preprocess, "test")
     generate_split(model, device, preprocess, "dev")
+
+
+def generate_gloss_dataset():
+    vocab = Vocab(source="pheonix")
+    device = torch.device("cuda:0")
+    model = SLR(rnn_hidden=512, vocab_size=vocab.size).to(device)
+    model.load_state_dict(torch.load(os.sep.join([WEIGHTS_DIR, "slr.pt"])))
+    model.eval()
+
+    X_tr, y_tr = read_pheonix("train", vocab, save=True)
+    X_batches, y_batches = split_batches(X_tr, y_tr, 16, shuffle=False, target_format=2)
+
+    with torch.no_grad():
+        for idx in range(len(X_batches)):
+            X_batch = X_batches[idx]
+            inp = torch.Tensor(X_batch).unsqueeze(1).to(device)
+            preds = model(inp).log_softmax(dim=2).permute(1, 0, 2).cpu().numpy()
+            for i in range(preds.shape[0]):
+                X = X_batch[i]
+                pred = preds[i]
+
+                # TODO
+
+    pass
+
+
+if __name__ == "__main__":
+    # extract_features()
+    pass

@@ -136,7 +136,6 @@ class BiLSTM(nn.Module):
     def forward(self, x):
         x = self.lstm(x)[0]
         x = self.emb(x)
-        x = F.log_softmax(x, dim=2)
         return x
 
 
