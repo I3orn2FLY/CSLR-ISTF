@@ -89,13 +89,19 @@ def get_split_wer(model, device, X, y, vocab, batch_size=16, beam_search=False):
     return Lev.distance(hypes, gts) / len(gts) * 100
 
 
-def train_end2end(model, device, vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, n_epochs, batch_size, mode=0):
-    lr = 0.005
-    # optimizer = SGD(model.parameters(), lr=lr, nesterov=True)
-    # optimizer = RMSprop(model.parameters(), lr=lr)
-    optimizer = Adam(model.parameters(), lr=lr)
-    scheduler = ReduceLROnPlateau(optimizer, verbose=True, patience=5)
+def train_end2end(vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, n_epochs, batch_size, lr=0.001, mode=0):
+    device = torch.device("cuda:0")
+    model = SLR(rnn_hidden=512, vocab_size=vocab.size).to(device)
 
+    if os.path.exists(os.sep.join([WEIGHTS_DIR, "slr_temp_fusion.pt"])):
+        model.load_state_dict(torch.load(os.sep.join([WEIGHTS_DIR, "slr_temp_fusion.pt"])))
+        print("Model Loaded")
+    else:
+        model.apply(weights_init)
+
+    optimizer = Adam(model.parameters(), lr=lr)
+
+    scheduler = ReduceLROnPlateau(optimizer, verbose=True, patience=5)
     loss_fn = nn.CTCLoss(zero_infinity=True)
 
     if mode == 0:
@@ -154,31 +160,84 @@ def train_end2end(model, device, vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test
         print()
         print()
 
-    def train_temp_fusion(model_feat_extractor):
-        loss_fn = nn.CrossEntropyLoss()
-        pass
 
-        return
+def train_temp_fusion(vocab, X_tr, y_tr, X_dev, y_dev, n_epochs=100, batch_size=8192, lr=0.01):
+    print("Training temporal fusion model")
+    device = torch.device("cuda:0")
+    model = SLR(rnn_hidden=512, vocab_size=vocab.size).to(device)
+    model.load_state_dict(torch.load(os.sep.join([WEIGHTS_DIR, "slr_temp_fusion.pt"])))
+
+    for param in model.seq_model.parameters():
+        param.requires_grad = False
+
+    loss_fn = nn.CrossEntropyLoss()
+    # optimizer = Adam(model.temp_fusion.parameters(), lr=lr)
+    optimizer = RMSprop(model.temp_fusion.parameters(), lr=lr)
+
+    scheduler = ReduceLROnPlateau(optimizer, verbose=True, patience=5)
+
+    y_tr = torch.LongTensor(y_tr).to(device)
+    y_dev = torch.LongTensor(y_dev).to(device)
+    X_dev = torch.Tensor(X_dev).to(device).unsqueeze(1)
+
+    with torch.no_grad():
+        pred = model(X_dev).permute([1, 0, 2]).squeeze()
+
+        best_dev_loss = loss_fn(pred, y_dev).item()
+        print("DEV LOSS:", best_dev_loss)
+
+    n_batches = len(X_tr) // batch_size + 1 * (len(X_tr) % batch_size != 0)
+    for epoch in range(1, n_epochs + 1):
+        print("Epoch", epoch)
+        model.train()
+        tr_losses = []
+        start_time = time.time()
+        for idx in range(n_batches):
+            optimizer.zero_grad()
+            start = idx * batch_size
+            end = min(start + batch_size, len(y_tr))
+            X_batch = torch.Tensor(X_tr[start:end]).to(device).unsqueeze(1)
+            y_batch = y_tr[start:end]
+            out = model(X_batch).permute([1, 0, 2]).squeeze()
+
+            loss = loss_fn(out, y_batch)
+            tr_losses.append(loss.item())
+
+            loss.backward()
+            optimizer.step()
+            if idx % 10 == 0:
+                print_progress(idx + 1, n_batches, start_time)
+
+        print("\rTrain Loss: ", np.mean(tr_losses))
+
+        model.eval()
+        with torch.no_grad():
+            pred = model(X_dev).permute([1, 0, 2]).squeeze()
+
+            dev_loss = loss_fn(pred, y_dev).item()
+
+            print("DEV LOSS:", dev_loss)
+            if dev_loss < best_dev_loss:
+                best_dev_loss = dev_loss
+                torch.save(model.state_dict(), os.sep.join([WEIGHTS_DIR, "slr_temp_fusion.pt"]))
+                print("Model Saved")
+
+            if scheduler:
+                scheduler.step(dev_loss)
 
 
 if __name__ == "__main__":
     vocab = Vocab(source="pheonix")
+    # X_tr = np.load(os.sep.join([VARS_DIR, "X_gloss_train.npy"]))
+    # y_tr = np.load(os.sep.join([VARS_DIR, "y_gloss_train.npy"]))
+    # X_dev = np.load(os.sep.join([VARS_DIR, "X_gloss_dev.npy"]))
+    # y_dev = np.load(os.sep.join([VARS_DIR, "y_gloss_dev.npy"]))
+    #
+    # train_temp_fusion(vocab, X_tr, y_tr, X_dev, y_dev)
+
     X_tr, y_tr = read_pheonix("train", vocab, save=True)
     X_test, y_test = read_pheonix("test", vocab, save=True)
     X_dev, y_dev = read_pheonix("dev", vocab, save=True)
     print()
 
-    device = torch.device("cuda:0")
-    model = SLR(rnn_hidden=512, vocab_size=vocab.size).to(device)
-
-    if os.path.exists(os.sep.join([WEIGHTS_DIR, "slr.pt"])):
-        model.load_state_dict(torch.load(os.sep.join([WEIGHTS_DIR, "slr.pt"])))
-        print("Model Loaded")
-    else:
-        model.apply(weights_init)
-
-    train_end2end(model, device, vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, n_epochs=200, batch_size=8, mode=1)
-
-    # train_temp_fusion()
-
-    # y_tr
+    train_end2end(vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, n_epochs=200, batch_size=8, mode=0)
