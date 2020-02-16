@@ -150,6 +150,21 @@ def get_batches_vgg_s_pheonix(split, vocab, max_batch_size, shuffle, target_form
     return X_batches, y_batches
 
 
+def load_gloss_dataset(with_blank=True):
+    X_path = os.sep.join([VARS_DIR, "X_gloss_"])
+    y_path = os.sep.join([VARS_DIR, "y_gloss_"])
+    if not with_blank:
+        X_path += "no_blank_"
+        y_path += "no_blank_"
+
+    X_tr = np.load(X_path + "train.npy")
+    y_tr = np.load(y_path + "train.npy")
+    X_dev = np.load(X_path + "dev.npy")
+    y_dev = np.load(y_path + "dev.npy")
+
+    return X_tr, y_tr, X_dev, y_dev
+
+
 def read_pheonix(split, vocab, save=False, fix_shapes=False):
     suffix = "_" + FRAME_FEAT_MODEL + "_" + split
     if fix_shapes:

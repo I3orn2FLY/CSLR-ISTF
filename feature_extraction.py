@@ -75,7 +75,7 @@ def extract_features():
     generate_split(model, device, preprocess, "dev")
 
 
-def generate_gloss_dataset():
+def generate_gloss_dataset(with_blank=True):
     vocab = Vocab(source="pheonix")
     device = torch.device("cuda:0")
     model = SLR(rnn_hidden=512, vocab_size=vocab.size).to(device)
@@ -97,7 +97,8 @@ def generate_gloss_dataset():
                 for j in range(len(preds[i])):
                     feat = X_batch[i][j * stride: (j + 1) * stride]
                     gloss = preds[i][j]
-
+                    if not with_blank and gloss == 0:
+                        continue
                     X.append(feat)
                     y.append(gloss)
 
@@ -121,6 +122,9 @@ def generate_gloss_dataset():
 
     X_path = os.sep.join([VARS_DIR, "X_gloss_"])
     y_path = os.sep.join([VARS_DIR, "y_gloss_"])
+    if not with_blank:
+        X_path += "no_blank_"
+        y_path += "no_blank_"
 
     np.save(X_path + "train", X_tr)
     np.save(y_path + "train", y_tr)
@@ -134,4 +138,4 @@ def generate_gloss_dataset():
 if __name__ == "__main__":
     # extract_features()
 
-    generate_gloss_dataset()
+    generate_gloss_dataset(with_blank=False)

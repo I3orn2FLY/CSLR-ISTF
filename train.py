@@ -8,7 +8,7 @@ from torch.optim import RMSprop, Adam, SGD
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from numpy import random
 from models import SLR, weights_init
-from data import read_pheonix, split_batches, Vocab
+from data import read_pheonix, split_batches, Vocab, load_gloss_dataset
 
 from utils import print_progress
 from config import *
@@ -161,7 +161,7 @@ def train_end2end(vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, n_epochs, bat
         print()
 
 
-def train_temp_fusion(vocab, X_tr, y_tr, X_dev, y_dev, n_epochs=100, batch_size=8192, lr=0.01):
+def train_temp_fusion(vocab, X_tr, y_tr, X_dev, y_dev, n_epochs=100, batch_size=8192, lr=0.001):
     print("Training temporal fusion model")
     device = torch.device("cuda:0")
     model = SLR(rnn_hidden=512, vocab_size=vocab.size).to(device)
@@ -171,10 +171,11 @@ def train_temp_fusion(vocab, X_tr, y_tr, X_dev, y_dev, n_epochs=100, batch_size=
         param.requires_grad = False
 
     loss_fn = nn.CrossEntropyLoss()
-    # optimizer = Adam(model.temp_fusion.parameters(), lr=lr)
-    optimizer = RMSprop(model.temp_fusion.parameters(), lr=lr)
+    optimizer = Adam(model.temp_fusion.parameters(), lr=lr)
+    # optimizer = RMSprop(model.temp_fusion.parameters(), lr=lr)
 
     scheduler = ReduceLROnPlateau(optimizer, verbose=True, patience=5)
+    scheduler = None
 
     y_tr = torch.LongTensor(y_tr).to(device)
     y_dev = torch.LongTensor(y_dev).to(device)
@@ -205,8 +206,8 @@ def train_temp_fusion(vocab, X_tr, y_tr, X_dev, y_dev, n_epochs=100, batch_size=
 
             loss.backward()
             optimizer.step()
-            if idx % 10 == 0:
-                print_progress(idx + 1, n_batches, start_time)
+            # if idx % 10 == 0:
+            #     print_progress(idx + 1, n_batches, start_time)
 
         print("\rTrain Loss: ", np.mean(tr_losses))
 
@@ -228,16 +229,12 @@ def train_temp_fusion(vocab, X_tr, y_tr, X_dev, y_dev, n_epochs=100, batch_size=
 
 if __name__ == "__main__":
     vocab = Vocab(source="pheonix")
-    # X_tr = np.load(os.sep.join([VARS_DIR, "X_gloss_train.npy"]))
-    # y_tr = np.load(os.sep.join([VARS_DIR, "y_gloss_train.npy"]))
-    # X_dev = np.load(os.sep.join([VARS_DIR, "X_gloss_dev.npy"]))
-    # y_dev = np.load(os.sep.join([VARS_DIR, "y_gloss_dev.npy"]))
-    #
+
+    # X_tr, y_tr, X_dev, y_dev = load_gloss_dataset(with_blank=False)
     # train_temp_fusion(vocab, X_tr, y_tr, X_dev, y_dev)
 
     X_tr, y_tr = read_pheonix("train", vocab, save=True)
     X_test, y_test = read_pheonix("test", vocab, save=True)
     X_dev, y_dev = read_pheonix("dev", vocab, save=True)
     print()
-
     train_end2end(vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, n_epochs=200, batch_size=8, mode=0)
