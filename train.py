@@ -8,9 +8,9 @@ from torch.optim import RMSprop, Adam, SGD
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from numpy import random
 from models import SLR, weights_init
-from data import read_pheonix, split_batches, Vocab, load_gloss_dataset
+from dataset import read_pheonix, load_gloss_dataset
 
-from utils import print_progress
+from utils import ProgressPrinter, split_batches, Vocab
 from config import *
 
 random.seed(0)
@@ -19,16 +19,12 @@ torch.backends.cudnn.deterministic = True
 
 
 # TODO
-# googlenet train
-# hand features
+# training with dataset/augmentation
+# load to dgx
+# may be try with densenet
 
 # evaluate and try training samples,
 # if they are ok, try fix lstm weights and re-train temporal fusion with predicted glosses
-
-
-# debug from CRNN => padded outputs, maybe inputs
-# permutations
-# try tensorflow
 
 
 def predict_glosses(preds, vocab, decoder):
@@ -112,10 +108,11 @@ def train_end2end(vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, n_epochs, bat
 
     for epoch in range(1, n_epochs + 1):
         print("Epoch", epoch)
-        start_time = time.time()
         tr_losses = []
         model.train()
         X_batches, y_batches = split_batches(X_tr, y_tr, batch_size, target_format=1)
+
+        pp = ProgressPrinter(len(y_batches), 10)
         for idx in range(len(X_batches)):
             optimizer.zero_grad()
             X_batch, y_batch = X_batches[idx], y_batches[idx]
@@ -133,8 +130,7 @@ def train_end2end(vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, n_epochs, bat
             loss.backward()
             optimizer.step()
 
-            if idx % 10 == 0:
-                print_progress(idx + 1, len(y_batches), start_time)
+            pp.show(idx)
 
         print()
         train_loss = np.mean(tr_losses)
@@ -172,7 +168,6 @@ def train_temp_fusion(vocab, X_tr, y_tr, X_dev, y_dev, n_epochs=100, batch_size=
 
     loss_fn = nn.CrossEntropyLoss()
     optimizer = Adam(model.temp_fusion.parameters(), lr=lr)
-    # optimizer = RMSprop(model.temp_fusion.parameters(), lr=lr)
 
     scheduler = ReduceLROnPlateau(optimizer, verbose=True, patience=5)
     scheduler = None
@@ -192,7 +187,6 @@ def train_temp_fusion(vocab, X_tr, y_tr, X_dev, y_dev, n_epochs=100, batch_size=
         print("Epoch", epoch)
         model.train()
         tr_losses = []
-        start_time = time.time()
         for idx in range(n_batches):
             optimizer.zero_grad()
             start = idx * batch_size
@@ -206,8 +200,6 @@ def train_temp_fusion(vocab, X_tr, y_tr, X_dev, y_dev, n_epochs=100, batch_size=
 
             loss.backward()
             optimizer.step()
-            # if idx % 10 == 0:
-            #     print_progress(idx + 1, n_batches, start_time)
 
         print("\rTrain Loss: ", np.mean(tr_losses))
 

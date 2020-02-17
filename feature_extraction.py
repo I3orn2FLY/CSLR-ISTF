@@ -7,20 +7,18 @@ import numpy as np
 import pandas as pd
 from models import FrameFeatModel, SLR
 from config import *
-from utils import print_progress
-from data import split_batches, Vocab
-from data import read_pheonix
-import ctcdecode
+from utils import ProgressPrinter, split_batches, Vocab
+from dataset import read_pheonix, get_pheonix_df
+import cv2
 
 
-def generate_split(model, device, preprocess, split):
-    df = pd.read_csv(os.sep.join([ANNO_DIR, "manual", split + ".corpus.csv"]), sep='|')
-
-    print("Feature extraction:", split, "split")
+def generate_cnn_features_split(model, device, preprocess, split):
     with torch.no_grad():
+        df = get_pheonix_df(split)
+        print("Feature extraction:", split, "split")
         L = df.shape[0]
-        start_time = time.time()
-        rand_idx = int(np.random.rand() * L)
+
+        pp = ProgressPrinter(L, 10)
         for idx in range(L):
             row = df.iloc[idx]
             img_dir = os.sep.join([IMAGES_DIR, split, row.folder])
@@ -35,14 +33,6 @@ def generate_split(model, device, preprocess, split):
             image_files = list(glob.glob(img_dir))
             image_files.sort()
 
-            # image_files = [os.path.split(img_file)[1] for img_file in image_files]
-            # if idx == rand_idx:
-            #     print()
-            #     for img_file in image_files:
-            #         print(img_file.split('.')[1].split('_')[-1])
-            #
-            #     exit()
-
             images = [Image.open(img_file) for img_file in image_files]
             inp = torch.stack([preprocess(image) for image in images])
             inp = inp.to(device)
@@ -52,13 +42,12 @@ def generate_split(model, device, preprocess, split):
                 os.makedirs(feat_dir)
             np.save(feat_file, feats)
 
-            if idx % 10 == 0:
-                print_progress(idx + 1, L, start_time)
+            pp.show(idx)
 
         print()
 
 
-def extract_features():
+def generate_cnn_features():
     device = torch.device("cuda:0")
     model = FrameFeatModel().to(device)
     model.eval()
@@ -70,9 +59,114 @@ def extract_features():
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
 
-    generate_split(model, device, preprocess, "train")
-    generate_split(model, device, preprocess, "test")
-    generate_split(model, device, preprocess, "dev")
+    generate_cnn_features_split(model, device, preprocess, "train")
+    generate_cnn_features_split(model, device, preprocess, "test")
+    generate_cnn_features_split(model, device, preprocess, "dev")
+
+
+def generate_numpy_image_mean(dest, side):
+    print("Generating numpy image mean")
+    split = "train"
+
+    mean_img_path = os.path.join(VARS_DIR, os.path.split(dest)[1] + "_mean.npy")
+    if os.path.exists(mean_img_path):
+        return
+
+    n = 0
+    mean_img = np.zeros((3, side, side))
+    df = get_pheonix_df(split)
+    pp = ProgressPrinter(df.shape[0], 25)
+    for idx in range(df.shape[0]):
+        row = df.iloc[idx]
+        feat_dir = os.sep.join([dest, split, row.folder])
+        np_video_file = feat_dir.replace("/*.png", ".npy")
+        if not os.path.exists(np_video_file):
+            print("ERROR NUMPY FILE DOES NOT EXIST:", np_video_file)
+            return
+
+        imgs = np.load(np_video_file)
+
+        mean_img += np.sum(imgs, axis=0)
+
+        n += len(imgs)
+        pp.show(idx)
+
+    mean_img /= n
+    pp.end()
+    np.save(mean_img_path.replace(".npy", ""), mean_img)
+
+
+def generate_numpy_image_std(dest, side):
+    print("Generating numpy image std")
+    split = "train"
+    mean_img_path = os.path.join(VARS_DIR, os.path.split(dest)[1] + "_mean.npy")
+    std_img_path = os.path.join(VARS_DIR, os.path.split(dest)[1] + "_std.npy")
+    if not os.path.exists(mean_img_path) or os.path.exists(std_img_path):
+        return
+
+    mean_img = np.load(mean_img_path)
+    n = 0
+    std_img = np.zeros((3, side, side))
+    df = get_pheonix_df(split)
+    pp = ProgressPrinter(df.shape[0], 25)
+    for idx in range(df.shape[0]):
+        row = df.iloc[idx]
+        feat_dir = os.sep.join([dest, split, row.folder])
+        np_video_file = feat_dir.replace("/*.png", ".npy")
+        if not os.path.exists(np_video_file):
+            print("ERROR NUMPY FILE DOES NOT EXIST:", np_video_file)
+            return
+
+        imgs = np.load(np_video_file)
+
+        std_img += np.sum(np.square(imgs - mean_img), axis=0)
+
+        n += len(imgs)
+        pp.show(idx)
+
+    std_img /= n
+
+    std_img = np.sqrt(std_img)
+
+    np.save(std_img_path.replace(".npy", ""), std_img)
+    pp.end()
+
+
+def generate_numpy_videos_split(split, source, dest, side):
+    print("Generating numpy video", split, "split")
+    df = get_pheonix_df(split)
+    pp = ProgressPrinter(df.shape[0], 2)
+    for idx in range(df.shape[0]):
+        row = df.iloc[idx]
+        img_dir = os.sep.join([source, split, row.folder])
+        feat_dir = os.sep.join([dest, split, row.folder])
+        np_video_file = feat_dir.replace("/*.png", "")
+        if os.path.exists(np_video_file + ".npy"):
+            pp.omit()
+            continue
+
+        feat_dir = os.path.split(np_video_file)[0]
+
+        image_files = list(glob.glob(img_dir))
+        image_files.sort()
+        imgs = np.array([cv2.resize(cv2.imread(img_file), (side, side)) for img_file in image_files])
+        imgs = imgs.transpose([0, 3, 1, 2])
+        if not os.path.exists(feat_dir):
+            os.makedirs(feat_dir)
+
+        np.save(np_video_file, imgs)
+
+        pp.show(idx)
+
+    pp.end()
+
+
+def generate_numpy_videos(source, dest, side):
+    generate_numpy_videos_split("train", source, dest, side)
+    generate_numpy_videos_split("dev", source, dest, side)
+    generate_numpy_videos_split("test", source, dest, side)
+    generate_numpy_image_mean(dest, side)
+    generate_numpy_image_std(dest, side)
 
 
 def generate_gloss_dataset(with_blank=True):
@@ -88,7 +182,7 @@ def generate_gloss_dataset(with_blank=True):
     X = []
     y = []
     with torch.no_grad():
-        start_time = time.time()
+        pp = ProgressPrinter(len(y_batches), 10)
         for idx in range(len(X_batches)):
             X_batch = X_batches[idx]
             inp = torch.Tensor(X_batch).unsqueeze(1).to(device)
@@ -102,8 +196,7 @@ def generate_gloss_dataset(with_blank=True):
                     X.append(feat)
                     y.append(gloss)
 
-            if idx % 5 == 0:
-                print_progress(idx + 1, len(X_batches), start_time)
+            pp.show(idx)
 
     print()
     assert len(X) == len(y), "ASD"
@@ -137,5 +230,6 @@ def generate_gloss_dataset(with_blank=True):
 
 if __name__ == "__main__":
     # extract_features()
+    generate_numpy_videos(source=HANDS_DIR, dest=HANDS_NP_IMGS_DIR, side=HAND_SIZE)
 
-    generate_gloss_dataset(with_blank=False)
+    # generate_gloss_dataset(with_blank=False)

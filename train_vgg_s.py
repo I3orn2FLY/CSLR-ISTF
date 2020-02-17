@@ -8,9 +8,9 @@ from torch.optim import RMSprop, Adam, SGD
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from numpy import random
 from models import SLR, weights_init
-from data import get_batches_vgg_s_pheonix, get_tensor_batch_vgg_s
+from dataset import get_batches_vgg_s_pheonix, get_tensor_batch_vgg_s
 from train import predict_glosses
-from utils import Vocab, print_progress
+from utils import Vocab, ProgressPrinter
 from config import *
 
 random.seed(0)
@@ -59,10 +59,11 @@ def train(model, device, vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, optimi
     best_train_loss = float("inf")
     for epoch in range(1, n_epochs + 1):
         print("Epoch", epoch)
-        start_time = time.time()
+
         tr_losses = []
 
         model.train()
+        pp = ProgressPrinter(len(X_tr), 10)
         for idx in range(len(X_tr)):
             optimizer.zero_grad()
 
@@ -87,8 +88,7 @@ def train(model, device, vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, optimi
             loss.backward()
             optimizer.step()
 
-            if idx % 10 == 0:
-                print_progress(idx + 1, len(y_tr), start_time)
+            pp.show(idx)
 
         print()
 
