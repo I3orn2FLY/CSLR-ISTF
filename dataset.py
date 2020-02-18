@@ -4,6 +4,7 @@ import glob
 import torch
 import cv2
 from torch.utils.data import Dataset
+from torch.utils.data import DataLoader
 from numpy import random
 from utils import *
 from config import *
@@ -17,6 +18,40 @@ preprocess_vgg_s = transforms.Compose([
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
+
+
+def hand_video_collate(batch):
+    videos = []
+    inp_lens = []
+    target_lens = []
+    targets = []
+
+    max_inp_len = 0
+    max_target_len = 0
+    for (video, inp_len, target, target_len) in batch:
+        max_inp_len = max(max_inp_len, inp_len)
+        max_target_len = max(max_target_len, target_len)
+        inp_lens.append(inp_len)
+        target_lens.append(target_len)
+        videos.append(video)
+        targets.append(target)
+
+
+    inp_lens = torch.LongTensor(inp_lens)
+    target_lens = torch.LongTensor(target_lens)
+
+    inp_batch = np.zeros((len(batch), max_inp_len, *video.shape[1:]), dtype=np.float32)
+    target_batch = np.zeros((len(batch), max_target_len), dtype=np.int64)
+
+    for idx, (video, inp_len, target, target_len) in enumerate(batch):
+        inp_batch[idx][:inp_len] = video
+        target_batch[idx][:target_len] = target
+
+    inp_batch = torch.from_numpy(inp_batch)
+
+    target_batch = torch.from_numpy(target_batch)
+
+    return inp_batch, inp_lens, target_batch, target_lens
 
 
 class PhoenixHandVideoDataset(Dataset):
@@ -42,23 +77,23 @@ class PhoenixHandVideoDataset(Dataset):
         img = img.transpose([2, 1, 0])
         return img
 
-    def _down_sample(self, imgs, out_seq_len):
-        L = len(imgs)
+    def _down_sample(self, video, out_seq_len):
+        L = len(video)
         diff = L // 4 - out_seq_len
         if diff < 1:
-            return imgs
+            return video
         n = int(L - 0.2 * random.rand() * diff)
-        imgs = np.array([imgs[int(i)] for i in np.linspace(0, L - 1, n)])
-        return imgs
+        video = np.array([video[int(i)] for i in np.linspace(0, L - 1, n)])
+        return video
 
-    def _frame_skip(self, imgs, out_seq_len):
-        diff = len(imgs) // 4 - out_seq_len
+    def _frame_skip(self, video, out_seq_len):
+        diff = len(video) // 4 - out_seq_len
         if diff < 3:
-            return imgs
+            return video
 
-        idxs = np.linspace(0, len(imgs) - 1, diff + 1)
+        idxs = np.linspace(0, len(video) - 1, diff + 1)
 
-        imgs = [img for img in imgs]
+        video = [img for img in video]
 
         skipped = 0
         for i in range(1, len(idxs)):
@@ -66,47 +101,45 @@ class PhoenixHandVideoDataset(Dataset):
                 step = idxs[i] - idxs[i - 1]
                 skip_idx = int(np.random.rand() * step + idxs[i - 1]) - skipped
                 skipped += 1
-                del imgs[skip_idx]
+                del video[skip_idx]
 
-        imgs = np.array(imgs)
+        video = np.array(video)
 
-        return imgs
+        return video
 
-    def _augment_imgs(self, imgs, out_seq_len):
-        for i, img in enumerate(imgs):
+    def _augment_video(self, video, out_seq_len):
+        for i, img in enumerate(video):
             if random.rand() < 0.8:
-                imgs[i] = self._crop(img)
+                video[i] = self._crop(img)
 
             if random.rand() < 0.8:
-                imgs[i] = self._noise(img)
+                video[i] = self._noise(img)
 
         if random.rand() < 0.7:
-            imgs = self._down_sample(imgs, out_seq_len)
+            video = self._down_sample(video, out_seq_len)
 
         if random.rand() < 0.7:
-            imgs = self._frame_skip(imgs, out_seq_len)
+            video = self._frame_skip(video, out_seq_len)
 
-        return imgs
+        return video
 
     def __getitem__(self, idx):
         row = self.df.iloc[idx]
         text = row.annotation
-        vectors = self.vocab.encode(text)
-        out_seq_len = len(vectors)
+        glosses = self.vocab.encode(text)
+        out_seq_len = len(glosses)
 
         video_dir = os.sep.join([HANDS_NP_IMGS_DIR, self.split, row.folder])
         np_video_file = video_dir.replace("/*.png", ".npy")
-        imgs = np.load(np_video_file)
-        imgs = (imgs - self.mean) / self.std
+        video = np.load(np_video_file)
+        video = (video - self.mean) / self.std
 
         if self.split == "train" and self.augment:
-            imgs = self._augment_imgs(imgs, out_seq_len)
+            video = self._augment_video(video, out_seq_len)
 
-        imgs = torch.Tensor(imgs)
-        glosses = torch.LongTensor(vectors)
-        out_seq_len = torch.LongTensor([len(vectors)])
+        inp_seq_len = len(video)
 
-        return (imgs, glosses, out_seq_len)
+        return (video, inp_seq_len, glosses, out_seq_len)
 
     def __len__(self):
         return self.df.shape[0]
@@ -244,7 +277,7 @@ def get_batches_vgg_s_pheonix(split, vocab, max_batch_size, shuffle, target_form
 if __name__ == "__main__":
     vocab = Vocab()
     dataset = PhoenixHandVideoDataset(vocab, "train", augment=True)
+    data_loader = DataLoader(dataset, batch_size=8, shuffle=True, collate_fn=hand_video_collate)
+    X_batch, x_lens, y_batch, y_lens = next(iter(data_loader))
 
-    for i in range(5):
-        imgs, glosses, seq_len = dataset[i]
     print()

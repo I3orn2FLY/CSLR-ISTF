@@ -83,11 +83,14 @@ class TempFusion(nn.Module):
         self.pool2 = nn.MaxPool2d(kernel_size=(2, 1), stride=(2, 1))
 
     def forward(self, x):
+        # (batch_size, 1, max_seq_length, 1024)
         x = self.conv1d_1(x)
         x = self.pool1(x)
         x = self.conv1d_2(x)
         x = self.pool2(x)
-        return x.squeeze(1)
+        x = x.squeeze(1)
+        # (batch_size, max_seq_length // 4, 1024)
+        return x
 
 
 class TempFusion_VGG_S(nn.Module):
@@ -98,6 +101,7 @@ class TempFusion_VGG_S(nn.Module):
         self.simple_temp_fusion = TempFusion()
 
     def forward(self, x):
+        # (batch_size, max_seq_length, 3, 101, 101)
         batch_feats = []
         for video_idx in range(x.shape[0]):
             video_feat = self.vgg_s(x[video_idx])
@@ -127,15 +131,29 @@ class TempFusionFixedVL(nn.Module):
 
 
 class BiLSTM(nn.Module):
-    def __init__(self, hidden_size, vocab_size):
+    def __init__(self, hidden_size, vocab_size, num_layers=2):
         super(BiLSTM, self).__init__()
         self.hidden_size = hidden_size
-        self.lstm = nn.LSTM(input_size=FRAME_FEAT_SIZE, hidden_size=hidden_size, num_layers=2, bidirectional=True)
+        self.num_layers = num_layers
+        self.lstm = nn.LSTM(input_size=FRAME_FEAT_SIZE, hidden_size=hidden_size, num_layers=num_layers,
+                            bidirectional=True)
         self.emb = nn.Linear(hidden_size * 2, vocab_size)
 
-    def forward(self, x):
-        x = self.lstm(x)[0]
+    def init_hidden(self, batch_size):
+        device = next(self.parameters()).device
+        h0 = torch.zeros((self.num_layers * 2, batch_size, self.hidden_size)).to(device)
+        c0 = torch.zeros((self.num_layers * 2, batch_size, self.hidden_size)).to(device)
+
+        return (h0, c0)
+
+    def forward(self, x, x_lengths):
+        # (max_seq_length // 4, batch_size, 1024)
+        hidden = self.init_hidden(x.shape[1])
+        x = torch.nn.utils.rnn.pack_padded_sequence(x, x_lengths, enforce_sorted=False)
+        x = self.lstm(x, hidden)[0]
+        x, _ = torch.nn.utils.rnn.pad_packed_sequence(x)
         x = self.emb(x)
+
         return x
 
 
@@ -157,10 +175,12 @@ class SLR(nn.Module):
 
         self.seq_model = BiLSTM(rnn_hidden, vocab_size)
 
-    def forward(self, x):
+    def forward(self, x, x_lengths):
+        # (batch_size, max_seq_length // 4, 1024)
         x = self.temp_fusion(x)
         x = x.permute(1, 0, 2)
-        x = self.seq_model(x)
+        # (max_seq_length // 4, batch_size, 1024)
+        x = self.seq_model(x, x_lengths)
         return x
 
 

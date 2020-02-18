@@ -67,7 +67,7 @@ def get_split_wer(model, device, X, y, vocab, batch_size=16, beam_search=False):
         for idx in range(len(X_batches)):
             X_batch, y_batch = X_batches[idx], y_batches[idx]
             inp = torch.Tensor(X_batch).unsqueeze(1).to(device)
-            preds = model(inp).log_softmax(dim=2).permute(1, 0, 2)
+            preds = model(inp, 4).log_softmax(dim=2).permute(1, 0, 2)
             out, out_idx = predict_glosses(preds, vocab, decoder)
 
             gt_batch = [" ".join(gt) for gt in vocab.decode_batch(y_batch)]
@@ -100,11 +100,11 @@ def train_end2end(vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, n_epochs, bat
     scheduler = ReduceLROnPlateau(optimizer, verbose=True, patience=5)
     loss_fn = nn.CTCLoss(zero_infinity=True)
 
-    if mode == 0:
-        objective = get_split_wer(model, device, X_dev, y_dev, vocab)
-        print("DEV WER:", objective)
-    else:
-        objective = float("inf")
+    # if mode == 0:
+    #     objective = get_split_wer(model, device, X_dev, y_dev, vocab)
+    #     print("DEV WER:", objective)
+    # else:
+    #     objective = float("inf")
 
     for epoch in range(1, n_epochs + 1):
         print("Epoch", epoch)
@@ -118,7 +118,7 @@ def train_end2end(vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, n_epochs, bat
             X_batch, y_batch = X_batches[idx], y_batches[idx]
 
             inp = torch.Tensor(X_batch).unsqueeze(1).to(device)
-            pred = model(inp).log_softmax(dim=2)
+            pred = model(inp, 4).log_softmax(dim=2)
 
             T, N, V = pred.shape
             gt = torch.IntTensor(y_batch[0])
