@@ -20,7 +20,7 @@ torch.backends.cudnn.deterministic = True
 
 def train(model, device, vocab, tr_data_loader, val_data_loader, n_epochs):
     optimizer = Adam(model.parameters(), lr=lr)
-    scheduler = LambdaLR(optimizer, lr_lambda=lambda x: 0.7)
+    scheduler = LambdaLR(optimizer, lr_lambda=0.7)
 
     data_loaders = {"Train": tr_data_loader, "Val": val_data_loader}
     loss_fn = nn.CTCLoss(zero_infinity=True)
