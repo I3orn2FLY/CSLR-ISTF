@@ -71,7 +71,7 @@ if __name__ == "__main__":
     vocab = Vocab(source="pheonix")
     tr_dataset = PhoenixHandVideoDataset(vocab, "train", augment=True)
     val_dataset = PhoenixHandVideoDataset(vocab, "dev", augment=False)
-    tr_data_loader = DataLoader(tr_dataset, batch_size=4, shuffle=True, collate_fn=hand_video_collate)
+    tr_data_loader = DataLoader(tr_dataset, batch_size=8, shuffle=True, collate_fn=hand_video_collate)
     val_data_loader = DataLoader(val_dataset, batch_size=8, shuffle=True, collate_fn=hand_video_collate)
 
     device = torch.device(DEVICE)
