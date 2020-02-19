@@ -20,7 +20,6 @@ torch.backends.cudnn.deterministic = True
 
 def train(model, device, vocab, tr_data_loader, val_data_loader, n_epochs):
     optimizer = Adam(model.parameters(), lr=lr)
-    scheduler = LambdaLR(optimizer, lr_lambda=0.7)
 
     data_loaders = {"Train": tr_data_loader, "Val": val_data_loader}
     loss_fn = nn.CTCLoss(zero_infinity=True)
@@ -65,7 +64,8 @@ def train(model, device, vocab, tr_data_loader, val_data_loader, n_epochs):
                 print("Model Saved")
 
         if epoch % 10 == 0:
-            scheduler.step(epoch)
+            for param_group in optimizer.param_groups:
+                param_group['lr'] *= 0.7
         print()
         print()
 
