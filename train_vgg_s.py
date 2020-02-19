@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from torch.optim import RMSprop, Adam, SGD
-from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.optim.lr_scheduler import LambdaLR
 from numpy import random
 from models import SLR, weights_init
 from torch.utils.data import DataLoader
@@ -20,7 +20,7 @@ torch.backends.cudnn.deterministic = True
 
 def train(model, device, vocab, tr_data_loader, val_data_loader, n_epochs):
     optimizer = Adam(model.parameters(), lr=lr)
-    scheduler = ReduceLROnPlateau(optimizer, verbose=True, patience=5)
+    scheduler = LambdaLR(optimizer, lr_lambda=lambda x: x * 0.7)
 
     data_loaders = {"Train": tr_data_loader, "Val": val_data_loader}
     loss_fn = nn.CTCLoss(zero_infinity=True)
@@ -58,11 +58,14 @@ def train(model, device, vocab, tr_data_loader, val_data_loader, n_epochs):
 
             phase_loss = np.mean(losses)
             print(phase, "Loss:", phase_loss)
+
             if phase == "Val" and phase_loss < best_val_loss:
                 best_val_loss = phase_loss
                 torch.save(model.state_dict(), os.sep.join([WEIGHTS_DIR, "slr_vgg_s.pt.pt"]))
                 print("Model Saved")
 
+        if epoch % 10 == 0:
+            scheduler.step()
         print()
         print()
 
@@ -71,8 +74,9 @@ if __name__ == "__main__":
     vocab = Vocab(source="pheonix")
     tr_dataset = PhoenixHandVideoDataset(vocab, "train", augment=True)
     val_dataset = PhoenixHandVideoDataset(vocab, "dev", augment=False)
-    tr_data_loader = DataLoader(tr_dataset, batch_size=8, shuffle=True, collate_fn=hand_video_collate)
-    val_data_loader = DataLoader(val_dataset, batch_size=8, shuffle=True, collate_fn=hand_video_collate)
+    tr_data_loader = DataLoader(tr_dataset, batch_size=END2END_BATCH_SIZE, shuffle=True, collate_fn=hand_video_collate)
+    val_data_loader = DataLoader(val_dataset, batch_size=END2END_BATCH_SIZE, shuffle=True,
+                                 collate_fn=hand_video_collate)
 
     device = torch.device(DEVICE)
     model = SLR(rnn_hidden=512, vocab_size=vocab.size, temp_fusion_type=2).to(device)
@@ -83,6 +87,6 @@ if __name__ == "__main__":
     else:
         model.apply(weights_init)
 
-    lr = 0.01
+    lr = 0.001
 
-    train(model, device, vocab, tr_data_loader, val_data_loader, n_epochs=100)
+    train(model, device, vocab, tr_data_loader, val_data_loader, n_epochs=150)
