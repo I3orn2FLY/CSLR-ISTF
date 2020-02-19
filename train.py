@@ -86,7 +86,7 @@ def get_split_wer(model, device, X, y, vocab, batch_size=16, beam_search=False):
 
 
 def train_end2end(vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, n_epochs, batch_size, lr=0.001, mode=0):
-    device = torch.device("cuda:0")
+    device = DEVICE
     model = SLR(rnn_hidden=512, vocab_size=vocab.size).to(device)
 
     if os.path.exists(os.sep.join([WEIGHTS_DIR, "slr_temp_fusion.pt"])):
@@ -159,7 +159,7 @@ def train_end2end(vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, n_epochs, bat
 
 def train_temp_fusion(vocab, X_tr, y_tr, X_dev, y_dev, n_epochs=100, batch_size=8192, lr=0.001):
     print("Training temporal fusion model")
-    device = torch.device("cuda:0")
+    device = DEVICE
     model = SLR(rnn_hidden=512, vocab_size=vocab.size).to(device)
     model.load_state_dict(torch.load(os.sep.join([WEIGHTS_DIR, "slr_temp_fusion.pt"])))
 

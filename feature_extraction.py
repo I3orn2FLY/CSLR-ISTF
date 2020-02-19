@@ -48,7 +48,7 @@ def generate_cnn_features_split(model, device, preprocess, split):
 
 
 def generate_cnn_features():
-    device = torch.device("cuda:0")
+    device = DEVICE
     model = FrameFeatModel().to(device)
     model.eval()
 
@@ -171,7 +171,7 @@ def generate_numpy_videos(source, dest, side):
 
 def generate_gloss_dataset(with_blank=True):
     vocab = Vocab(source="pheonix")
-    device = torch.device("cuda:0")
+    device = DEVICE
     model = SLR(rnn_hidden=512, vocab_size=vocab.size).to(device)
     model.load_state_dict(torch.load(os.sep.join([WEIGHTS_DIR, "slr.pt"])))
     model.eval()
