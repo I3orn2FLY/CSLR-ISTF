@@ -65,7 +65,7 @@ def train(model, device, vocab, tr_data_loader, val_data_loader, n_epochs):
                 print("Model Saved")
 
         if epoch % 10 == 0:
-            scheduler.step()
+            scheduler.step(epoch)
         print()
         print()
 
