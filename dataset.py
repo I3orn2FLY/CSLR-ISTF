@@ -36,7 +36,6 @@ def hand_video_collate(batch):
         videos.append(video)
         targets.append(target)
 
-
     inp_lens = torch.LongTensor(inp_lens)
     target_lens = torch.LongTensor(target_lens)
 
@@ -63,18 +62,26 @@ class PhoenixHandVideoDataset(Dataset):
         self.mean = np.load(os.path.join(VARS_DIR, os.path.split(HANDS_NP_IMGS_DIR)[1] + "_mean.npy"))
         self.std = np.load(os.path.join(VARS_DIR, os.path.split(HANDS_NP_IMGS_DIR)[1] + "_std.npy"))
 
-    def _noise(self, img):
-        img += 0.01 - 0.02 * random.rand(*img.shape)
-        return img
+    def _noise(self, video):
+        video = video.astype(np.float32)
+        video += 2 - 4 * random.rand(*video.shape)
+
+        video = np.maximum(video, 0)
+        video = np.minimum(video, 255)
+
+        # video = video.astype(np.uint8)
+        return video
 
     def _crop(self, img):
         img = img.transpose([1, 2, 0])
         h, w = img.shape[:2]
-        y1, x1 = int(0.1 * random.rand() * h), int(0.1 * random.rand() * h)
-        y2, x2 = h - int(0.1 * random.rand() * h), w - int(0.1 * random.rand() * h)
+        y1, x1 = int(0.2 * random.rand() * h), int(0.2 * random.rand() * h)
+        y2, x2 = h - int(0.2 * random.rand() * h), w - int(0.2 * random.rand() * h)
+
         img = img[y1:y2, x1:x2]
         img = cv2.resize(img, (w, h))
-        img = img.transpose([2, 1, 0])
+
+        img = img.transpose([2, 0, 1])
         return img
 
     def _down_sample(self, video, out_seq_len):
@@ -112,16 +119,13 @@ class PhoenixHandVideoDataset(Dataset):
             if random.rand() < 0.8:
                 video[i] = self._crop(img)
 
-            # if random.rand() < 0.8:
-                # video[i] = self._noise(img)
-
         if random.rand() < 0.7:
-            print("DownSampled")
             video = self._down_sample(video, out_seq_len)
 
         if random.rand() < 0.7:
-            print("Frame skipped")
             video = self._frame_skip(video, out_seq_len)
+
+        video = self._noise(video)
 
         return video
 
@@ -138,14 +142,12 @@ class PhoenixHandVideoDataset(Dataset):
         if self.split == "train" and self.augment:
             video = self._augment_video(video, out_seq_len)
 
-
-        for image in video:
-            img = image.transpose([1, 2, 0])
-
-            cv2.imshow("WINDOW", img)
-            if cv2.waitKey(0) == 27:
-                exit(0)
-
+        # for image in video:
+        #     img = image.transpose([1, 2, 0])
+        #
+        #     cv2.imshow("WINDOW", img)
+        #     if cv2.waitKey(0) == 27:
+        #         exit(0)
 
         video = (video - self.mean) / self.std
 
@@ -160,18 +162,6 @@ class PhoenixHandVideoDataset(Dataset):
 def get_pheonix_df(split):
     path = os.sep.join([ANNO_DIR, "manual", split + ".corpus.csv"])
     return pd.read_csv(path, sep='|')
-
-
-def get_tensor_batch_vgg_s(X, preprocess=preprocess_vgg_s):
-    batch = []
-    for image_files in X:
-        images = [Image.open(img_file) for img_file in image_files]
-
-        video_tensor = torch.stack([preprocess(image) for image in images])
-        batch.append(video_tensor)
-
-    batch = torch.stack(batch)
-    return torch.Tensor(batch)
 
 
 def load_gloss_dataset(with_blank=True):
@@ -243,47 +233,6 @@ def read_pheonix(split, vocab, save=False, fix_shapes=False):
             pickle.dump(y, f)
 
     return X, y
-
-
-def get_batches_vgg_s_pheonix(split, vocab, max_batch_size, shuffle, target_format=2):
-    X_path = os.sep.join([VARS_DIR, "X_vgg_s_" + split + ".pkl"])
-
-    y_path = os.sep.join([VARS_DIR, "y_vgg_s_" + split + ".pkl"])
-
-    if os.path.exists(X_path) and os.path.exists(y_path):
-        with open(X_path, 'rb') as f:
-            X = pickle.load(f)
-
-        with open(y_path, 'rb') as f:
-            y = pickle.load(f)
-
-        return X, y
-
-    df = get_pheonix_df(split)
-    X = []
-    y = []
-    for idx in range(df.shape[0]):
-        row = df.iloc[idx]
-        text = row.annotation
-        img_dir = os.sep.join([HANDS_DIR, split, row.folder])
-
-        image_files = list(glob.glob(img_dir))
-        image_files.sort()
-
-        vectors = vocab.encode(text)
-
-        X.append(image_files)
-        y.append(vectors)
-
-    X_batches, y_batches = split_batches(X, y, max_batch_size, shuffle, target_format=target_format)
-
-    with open(X_path, 'wb') as f:
-        pickle.dump(X_batches, f)
-
-    with open(y_path, 'wb') as f:
-        pickle.dump(y_batches, f)
-
-    return X_batches, y_batches
 
 
 if __name__ == "__main__":
