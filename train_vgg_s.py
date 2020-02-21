@@ -62,9 +62,9 @@ def train(model, device, vocab, tr_data_loader, val_data_loader, n_epochs):
                 best_val_loss = phase_loss
                 torch.save(model.state_dict(), os.sep.join([WEIGHTS_DIR, "slr_vgg_s.pt.pt"]))
                 print("Model Saved")
-        # if epoch % 10 == 0:
-        #     for param_group in optimizer.param_groups:
-        #         param_group['lr'] *= 0.7
+        if epoch % 50 == 0:
+            for param_group in optimizer.param_groups:
+                param_group['lr'] *= 0.1
         print()
         print()
 
@@ -88,4 +88,4 @@ if __name__ == "__main__":
 
     lr = 0.001
 
-    train(model, device, vocab, tr_data_loader, val_data_loader, n_epochs=50)
+    train(model, device, vocab, tr_data_loader, val_data_loader, n_epochs=200)
