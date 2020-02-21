@@ -112,13 +112,15 @@ class PhoenixHandVideoDataset(Dataset):
             if random.rand() < 0.8:
                 video[i] = self._crop(img)
 
-            if random.rand() < 0.8:
-                video[i] = self._noise(img)
+            # if random.rand() < 0.8:
+                # video[i] = self._noise(img)
 
         if random.rand() < 0.7:
+            print("DownSampled")
             video = self._down_sample(video, out_seq_len)
 
         if random.rand() < 0.7:
+            print("Frame skipped")
             video = self._frame_skip(video, out_seq_len)
 
         return video
@@ -132,10 +134,20 @@ class PhoenixHandVideoDataset(Dataset):
         video_dir = os.sep.join([HANDS_NP_IMGS_DIR, self.split, row.folder])
         np_video_file = video_dir.replace("/*.png", ".npy")
         video = np.load(np_video_file)
-        video = (video - self.mean) / self.std
 
         if self.split == "train" and self.augment:
             video = self._augment_video(video, out_seq_len)
+
+
+        for image in video:
+            img = image.transpose([1, 2, 0])
+
+            cv2.imshow("WINDOW", img)
+            if cv2.waitKey(0) == 27:
+                exit(0)
+
+
+        video = (video - self.mean) / self.std
 
         inp_seq_len = len(video)
 

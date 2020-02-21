@@ -33,7 +33,7 @@ def train(model, device, vocab, tr_data_loader, val_data_loader, n_epochs):
                 model.eval()
 
             losses = []
-            pp = ProgressPrinter(len(data_loaders[phase]), 1)
+            # pp = ProgressPrinter(len(data_loaders[phase]), 1)
             with torch.set_grad_enabled(phase == "Train"):
                 for idx, (X_batch, x_lens, y_batch, y_lens) in enumerate(data_loaders[phase]):
                     optimizer.zero_grad()
@@ -51,9 +51,9 @@ def train(model, device, vocab, tr_data_loader, val_data_loader, n_epochs):
                         loss.backward()
                         optimizer.step()
 
-                    pp.show(idx)
+                    # pp.show(idx)
 
-            pp.end()
+            # pp.end()
 
             phase_loss = np.mean(losses)
             print(phase, "Loss:", phase_loss)
@@ -62,10 +62,9 @@ def train(model, device, vocab, tr_data_loader, val_data_loader, n_epochs):
                 best_val_loss = phase_loss
                 torch.save(model.state_dict(), os.sep.join([WEIGHTS_DIR, "slr_vgg_s.pt.pt"]))
                 print("Model Saved")
-
-        if epoch % 10 == 0:
-            for param_group in optimizer.param_groups:
-                param_group['lr'] *= 0.7
+        # if epoch % 10 == 0:
+        #     for param_group in optimizer.param_groups:
+        #         param_group['lr'] *= 0.7
         print()
         print()
 
@@ -89,4 +88,4 @@ if __name__ == "__main__":
 
     lr = 0.001
 
-    train(model, device, vocab, tr_data_loader, val_data_loader, n_epochs=150)
+    train(model, device, vocab, tr_data_loader, val_data_loader, n_epochs=50)
