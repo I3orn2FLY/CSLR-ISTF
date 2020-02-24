@@ -27,15 +27,14 @@ torch.backends.cudnn.deterministic = True
 # if they are ok, try fix lstm weights and re-train temporal fusion with predicted glosses
 
 
-def predict_glosses(preds, vocab, decoder):
-    out_gloss = []
-    out_idx = []
+def predict_glosses(preds, decoder):
+    out_sentences = []
     if decoder:
         beam_result, beam_scores, timesteps, out_seq_len = decoder.decode(preds)
         for i in range(preds.size(0)):
             hypo = list(beam_result[i][0][:out_seq_len[i][0]])
-            out_idx += hypo
-            out_gloss.append(" ".join([vocab.idx2gloss[x] for x in hypo]))
+            out_sentences += hypo
+
     else:
         preds = preds.argmax(dim=2).cpu().numpy()
         # glosses_batch = vocab.decode_batch(preds)
@@ -46,10 +45,9 @@ def predict_glosses(preds, vocab, decoder):
                     continue
                 hypo.append(pred[i])
 
-            out_idx += hypo
-            out_gloss.append(" ".join([vocab.idx2gloss[x] for x in hypo]))
+            out_sentences += hypo
 
-    return out_gloss, out_idx
+    return out_sentences
 
 
 def get_split_wer(model, device, X, y, vocab, batch_size=16, beam_search=False):
@@ -68,12 +66,7 @@ def get_split_wer(model, device, X, y, vocab, batch_size=16, beam_search=False):
             X_batch, y_batch = X_batches[idx], y_batches[idx]
             inp = torch.Tensor(X_batch).unsqueeze(1).to(device)
             preds = model(inp, 4).log_softmax(dim=2).permute(1, 0, 2)
-            out, out_idx = predict_glosses(preds, vocab, decoder)
-
-            gt_batch = [" ".join(gt) for gt in vocab.decode_batch(y_batch)]
-
-            if idx == 10:
-                print("EXAMPLE: [" + gt_batch[0] + "]", "[" + out[0] + "]")
+            out_idx = predict_glosses(preds, decoder)
 
             for gt in y_batch:
                 gts += gt
