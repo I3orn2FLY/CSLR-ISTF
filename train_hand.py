@@ -8,6 +8,8 @@ from models import SLR, weights_init
 from torch.utils.data import DataLoader
 from dataset import PhoenixHandVideoDataset, hand_video_collate
 from utils import Vocab, ProgressPrinter
+
+import Levenshtein as Lev
 from config import *
 
 random.seed(0)
@@ -23,7 +25,15 @@ def train(model, device, vocab, tr_data_loader, val_data_loader, n_epochs):
 
     data_loaders = {"Train": tr_data_loader, "Val": val_data_loader}
     loss_fn = nn.CTCLoss(zero_infinity=True)
-    best_val_loss = float("inf")
+
+    criterion_phase = CRIT_PHASE_END2END_HAND
+    best_wer_path = os.sep.join([VARS_DIR, "best_wer_end2end_hand_" + criterion_phase + ".txt"])
+    if os.path.exists(best_wer_path):
+        with open(best_wer_path, 'r') as f:
+            best_wer = float(f.readline().strip())
+    else:
+        best_wer = float("inf")
+
     for epoch in range(1, n_epochs + 1):
         print("Epoch", epoch)
         for phase in ['Train', 'Val']:
@@ -33,7 +43,7 @@ def train(model, device, vocab, tr_data_loader, val_data_loader, n_epochs):
                 model.eval()
 
             losses = []
-            pred_sentences = []
+            hypes = []
             gts = []
             with torch.set_grad_enabled(phase == "Train"):
                 for idx, (X_batch, x_lens, y_batch, y_lens) in enumerate(data_loaders[phase]):
@@ -53,27 +63,31 @@ def train(model, device, vocab, tr_data_loader, val_data_loader, n_epochs):
                         optimizer.step()
 
                     out_sentences = predict_glosses(preds, decoder=None)
+                    for i in range(len(y_lens)):
+                        gts += y_batch[i][:y_lens[i].item()].tolist()
 
-                    gts += [y_batch[i][:y_lens[i]].tolist() for i in range(y_batch)]
+                    hypes += out_sentences
 
-                    pred_sentences += out_sentences
-                    # pp.show(idx)
-
-            # pp.end()
+            hypes = "".join([chr(x) for x in hypes])
+            gts = "".join([chr(x) for x in gts])
+            phase_wer = Lev.distance(hypes, gts) / len(gts) * 100
 
             phase_loss = np.mean(losses)
-            print(phase, "Loss:", phase_loss)
+            print(phase, "WER:", phase_wer, "Loss:", phase_loss)
 
-            if phase == "Train" and phase_loss < best_val_loss:
-                best_val_loss = phase_loss
-                torch.save(model.state_dict(), os.sep.join([WEIGHTS_DIR, "slr_vgg_s.pt"]))
+            if phase == criterion_phase and phase_wer < best_wer:
+                best_wer = phase_wer
+                with open(best_wer_path, 'w') as f:
+                    f.write(str(best_wer) + "\n")
+
+                torch.save(model.state_dict(), END2END_HAND_MODEL_PATH)
                 print("Model Saved")
 
-        # if epoch % 50 == 0:
-        #     for param_group in optimizer.param_groups:
-        #         param_group['lr'] *= 0.1
-        print()
-        print()
+            # if epoch % 50 == 0:
+            #     for param_group in optimizer.param_groups:
+            #         param_group['lr'] *= 0.1
+            print()
+            print()
 
 
 if __name__ == "__main__":
@@ -88,8 +102,8 @@ if __name__ == "__main__":
     device = torch.device(DEVICE)
     model = SLR(rnn_hidden=512, vocab_size=vocab.size, temp_fusion_type=2).to(device)
     load = True
-    if load and os.path.exists(os.sep.join([WEIGHTS_DIR, "slr_vgg_s.pt"])):
-        model.load_state_dict(torch.load(os.sep.join([WEIGHTS_DIR, "slr_vgg_s.pt"])))
+    if load and os.path.exists(END2END_HAND_MODEL_PATH):
+        model.load_state_dict(torch.load(END2END_HAND_MODEL_PATH))
         print("Model Loaded")
     else:
         model.apply(weights_init)
