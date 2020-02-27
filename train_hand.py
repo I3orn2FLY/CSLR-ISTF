@@ -19,6 +19,8 @@ torch.backends.cudnn.deterministic = True
 
 # add wer
 # may be, investigate LSTM, masking
+# try do split batching with augmentations
+
 
 def train(model, device, vocab, tr_data_loader, val_data_loader, n_epochs):
     optimizer = Adam(model.parameters(), lr=LR)
@@ -95,9 +97,9 @@ if __name__ == "__main__":
     tr_dataset = PhoenixHandVideoDataset(vocab, "train", augment=True)
     val_dataset = PhoenixHandVideoDataset(vocab, "dev", augment=False)
     tr_data_loader = DataLoader(tr_dataset, batch_size=END2END_HAND_BATCH_SIZE, shuffle=True,
-                                collate_fn=hand_video_collate)
+                                collate_fn=hand_video_collate, num_workers=8)
     val_data_loader = DataLoader(val_dataset, batch_size=END2END_HAND_BATCH_SIZE, shuffle=True,
-                                 collate_fn=hand_video_collate)
+                                 collate_fn=hand_video_collate, num_workers=8)
 
     device = torch.device(DEVICE)
     model = SLR(rnn_hidden=512, vocab_size=vocab.size, temp_fusion_type=2).to(device)
