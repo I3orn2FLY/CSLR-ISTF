@@ -146,12 +146,16 @@ class BiLSTM(nn.Module):
 
         return (h0, c0)
 
-    def forward(self, x, x_lengths):
+    def forward(self, x, x_lengths=None):
         # (max_seq_length // 4, batch_size, 1024)
         hidden = self.init_hidden(x.shape[1])
-        x = torch.nn.utils.rnn.pack_padded_sequence(x, x_lengths, enforce_sorted=False)
+        if x_lengths is not None:
+            x = torch.nn.utils.rnn.pack_padded_sequence(x, x_lengths, enforce_sorted=False)
+
         x = self.lstm(x, hidden)[0]
-        x, _ = torch.nn.utils.rnn.pad_packed_sequence(x)
+
+        if x_lengths is not None:
+            x, _ = torch.nn.utils.rnn.pad_packed_sequence(x)
         x = self.emb(x)
 
         return x
@@ -175,7 +179,7 @@ class SLR(nn.Module):
 
         self.seq_model = BiLSTM(rnn_hidden, vocab_size)
 
-    def forward(self, x, x_lengths):
+    def forward(self, x, x_lengths=None):
         # (batch_size, max_seq_length // 4, 1024)
         x = self.temp_fusion(x)
         x = x.permute(1, 0, 2)

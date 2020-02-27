@@ -22,10 +22,10 @@ torch.backends.cudnn.deterministic = True
 # try do split batching with augmentations
 
 
-def train(model, device, vocab, tr_data_loader, val_data_loader, n_epochs):
+def train(model, device, vocab, tr_dataset, val_dataset, n_epochs):
     optimizer = Adam(model.parameters(), lr=LR)
 
-    data_loaders = {"Train": tr_data_loader, "Val": val_data_loader}
+    datasets = {"Train": tr_dataset, "Val": val_dataset}
     loss_fn = nn.CTCLoss(zero_infinity=True)
 
     criterion_phase = CRIT_PHASE_END2END_HAND
@@ -33,6 +33,7 @@ def train(model, device, vocab, tr_data_loader, val_data_loader, n_epochs):
     if os.path.exists(best_wer_path):
         with open(best_wer_path, 'r') as f:
             best_wer = float(f.readline().strip())
+            print("BEST" + criterion_phase + "WER:", best_wer)
     else:
         best_wer = float("inf")
 
@@ -44,16 +45,24 @@ def train(model, device, vocab, tr_data_loader, val_data_loader, n_epochs):
             else:
                 model.eval()
 
+            dataset = datasets[phase]
+            n_batches = dataset.start_epoch()
             losses = []
             hypes = []
             gts = []
-            with torch.set_grad_enabled(phase == "Train"):
-                for idx, (X_batch, x_lens, y_batch, y_lens) in enumerate(data_loaders[phase]):
-                    optimizer.zero_grad()
 
-                    X_batch, x_lens = X_batch.to(device), x_lens // 4
-                    preds = model(X_batch, x_lens).log_softmax(dim=2)
-                    loss = loss_fn(preds, y_batch, x_lens, y_lens)
+            with torch.set_grad_enabled(phase == "Train"):
+                pp = ProgressPrinter(n_batches, 5)
+                for i in range(n_batches):
+                    optimizer.zero_grad()
+                    X_batch, Y_batch, Y_lens = dataset.get_batch(i)
+
+                    X_batch = X_batch.to(device)
+                    preds = model(X_batch).log_softmax(dim=2)
+
+                    T, N, V = preds.shape
+                    X_lens = torch.full(size=(N,), fill_value=T, dtype=torch.int32)
+                    loss = loss_fn(preds, Y_batch, X_lens, Y_lens)
 
                     if torch.isnan(loss):
                         print("NAN!!")
@@ -65,10 +74,14 @@ def train(model, device, vocab, tr_data_loader, val_data_loader, n_epochs):
                         optimizer.step()
 
                     out_sentences = predict_glosses(preds, decoder=None)
-                    for i in range(len(y_lens)):
-                        gts += y_batch[i][:y_lens[i].item()].tolist()
-
+                    gts += [y for y in Y_batch.view(-1).tolist() if y != 0]
                     hypes += out_sentences
+
+                    if SHOW_PROGRESS:
+                        pp.show(i)
+
+                if SHOW_PROGRESS:
+                    pp.end()
 
             hypes = "".join([chr(x) for x in hypes])
             gts = "".join([chr(x) for x in gts])
@@ -88,18 +101,14 @@ def train(model, device, vocab, tr_data_loader, val_data_loader, n_epochs):
             # if epoch % 50 == 0:
             #     for param_group in optimizer.param_groups:
             #         param_group['lr'] *= 0.1
-            print()
-            print()
+        print()
+        print()
 
 
 if __name__ == "__main__":
     vocab = Vocab(source="pheonix")
-    tr_dataset = PhoenixHandVideoDataset(vocab, "train", augment=True)
-    val_dataset = PhoenixHandVideoDataset(vocab, "dev", augment=False)
-    tr_data_loader = DataLoader(tr_dataset, batch_size=END2END_HAND_BATCH_SIZE, shuffle=True,
-                                collate_fn=hand_video_collate, num_workers=8)
-    val_data_loader = DataLoader(val_dataset, batch_size=END2END_HAND_BATCH_SIZE, shuffle=True,
-                                 collate_fn=hand_video_collate, num_workers=8)
+    tr_dataset = PhoenixHandVideoDataset(vocab, "train", augment=True, max_batch_size=END2END_HAND_BATCH_SIZE)
+    val_dataset = PhoenixHandVideoDataset(vocab, "dev", augment=False, max_batch_size=END2END_HAND_BATCH_SIZE)
 
     device = torch.device(DEVICE)
     model = SLR(rnn_hidden=512, vocab_size=vocab.size, temp_fusion_type=2).to(device)
@@ -110,4 +119,4 @@ if __name__ == "__main__":
     else:
         model.apply(weights_init)
 
-    train(model, device, vocab, tr_data_loader, val_data_loader, n_epochs=N_EPOCHS_END2END_HAND)
+    train(model, device, vocab, tr_dataset, val_dataset, n_epochs=N_EPOCHS_END2END_HAND)

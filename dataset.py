@@ -95,7 +95,9 @@ class PhoenixHandVideoDataset():
                 self.X_lens.append(len(video))
 
             prefix_dir = os.sep.join([VARS_DIR, "PhoenixHandVideoDataset"])
-            os.makedirs(prefix_dir)
+
+            if not os.path.exists(prefix_dir):
+                os.makedirs(prefix_dir)
             with open(X_path, 'wb') as f:
                 pickle.dump(self.X, f)
 
@@ -108,25 +110,30 @@ class PhoenixHandVideoDataset():
     def get_batch(self, idx):
         batch_idxs = self.batches[idx]
         X_batch = []
-        Y_batch = []
         Y_lens = []
+        max_target_length = 0
         for i in batch_idxs:
             video = np.load(self.X[i])
             if self.augment:
                 video = self._augment_video(video, self.X_aug_lens[i])
 
-            for image in video:
-                img = image.transpose([1, 2, 0])
-                cv2.imshow("WINDOW",img)
-                cv2.waitKey(0)
-
-
+            # for image in video:
+            #     img = image.transpose([1, 2, 0])
+            #     cv2.imshow("WINDOW", img)
+            #     cv2.waitKey(0)
 
             X_batch.append(video)
-            Y_batch += self.Y[i]
+            max_target_length = max(max_target_length, len(self.Y[i]))
             Y_lens.append(len(self.Y[i]))
 
-        X_batch = torch.from_numpy(np.array(X_batch))
+        X_batch = torch.Tensor(np.array(X_batch))
+
+        Y_batch = np.zeros((len(batch_idxs), max_target_length))
+
+        for idx, i in enumerate(batch_idxs):
+            Y_batch[idx][:len(self.Y[i])] = self.Y[i]
+
+
         Y_batch = torch.IntTensor(Y_batch)
         Y_lens = torch.IntTensor(Y_lens)
 
@@ -137,7 +144,6 @@ class PhoenixHandVideoDataset():
         len_table = dict()
 
         for i, length in enumerate(self.X_aug_lens):
-
             if length in len_table:
                 len_table[length].append(i)
             else:
@@ -154,10 +160,8 @@ class PhoenixHandVideoDataset():
             if shuffle:
                 random.shuffle(idxs)
             s = 0
-            while (s < self.length):
+            while (s < len(idxs)):
                 e = min(s + self.max_batch_size, len(idxs))
-                if e > len(idxs):
-                    e = len(idxs)
 
                 self.batches.append(idxs[s:e])
 
