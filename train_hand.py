@@ -33,7 +33,7 @@ def train(model, device, vocab, tr_dataset, val_dataset, n_epochs):
     if os.path.exists(best_wer_path):
         with open(best_wer_path, 'r') as f:
             best_wer = float(f.readline().strip())
-            print("BEST " + criterion_phase + "WER:", best_wer)
+            print("BEST " + criterion_phase + " WER:", best_wer)
     else:
         best_wer = float("inf")
 
