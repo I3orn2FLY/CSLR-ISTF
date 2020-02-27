@@ -125,13 +125,12 @@ class PhoenixHandVideoDataset(Dataset):
         if random.rand() < 0.7:
             video = self._frame_skip(video, out_seq_len)
 
-        video = self._noise(video)
+        # video = self._noise(video)
 
         return video
 
     def __getitem__(self, idx):
         row = self.df.iloc[idx]
-        text = row.annotation
         glosses = self.vocab.encode(text)
         out_seq_len = len(glosses)
 
