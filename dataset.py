@@ -55,7 +55,7 @@ def hand_video_collate(batch):
 
 class PhoenixHandVideoDataset():
     def __init__(self, vocab, split, max_batch_size, augment_frame=True, augment_temp=True):
-        if split != "train":
+        if split == "train":
             self.augment_temp = augment_temp
             self.augment_frame = augment_frame
         else:
