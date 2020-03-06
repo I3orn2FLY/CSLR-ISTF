@@ -23,18 +23,21 @@ torch.backends.cudnn.deterministic = True
 
 
 def train(model, device, vocab, tr_dataset, val_dataset, n_epochs):
-    optimizer = Adam(model.parameters(), lr=LR)
+    optimizer = Adam(model.parameters(), lr=LR_HAND)
 
     datasets = {"Train": tr_dataset, "Val": val_dataset}
     loss_fn = nn.CTCLoss(zero_infinity=True)
 
     criterion_phase = CRIT_PHASE_END2END_HAND
-    best_wer_path = os.sep.join([VARS_DIR, "best_wer_end2end_hand_" + criterion_phase + ".txt"])
-    if os.path.exists(best_wer_path):
-        with open(best_wer_path, 'r') as f:
+    best_wer_dir = os.sep.join([VARS_DIR, "PheonixWER"])
+    best_wer_file = best_wer_dir + os.sep + "END2END_HAND_" + criterion_phase + ".txt"
+    if os.path.exists(best_wer_file):
+        with open(best_wer_file, 'r') as f:
             best_wer = float(f.readline().strip())
             print("BEST " + criterion_phase + " WER:", best_wer)
     else:
+        if not os.path.exists(best_wer_dir):
+            os.makedirs(best_wer_dir)
         best_wer = float("inf")
 
     for epoch in range(1, n_epochs + 1):
@@ -100,7 +103,7 @@ def train(model, device, vocab, tr_dataset, val_dataset, n_epochs):
 
             if phase == criterion_phase and phase_wer < best_wer:
                 best_wer = phase_wer
-                with open(best_wer_path, 'w') as f:
+                with open(best_wer_file, 'w') as f:
                     f.write(str(best_wer) + "\n")
 
                 torch.save(model.state_dict(), END2END_HAND_MODEL_PATH)
@@ -109,6 +112,7 @@ def train(model, device, vocab, tr_dataset, val_dataset, n_epochs):
             # if epoch % 50 == 0:
             #     for param_group in optimizer.param_groups:
             #         param_group['lr'] *= 0.1
+
         print()
         print()
 
@@ -129,4 +133,4 @@ if __name__ == "__main__":
     else:
         model.apply(weights_init)
 
-    train(model, device, vocab, tr_dataset, val_dataset, n_epochs=N_EPOCHS_END2END_HAND)
+    train(model, device, vocab, tr_dataset, val_dataset, n_epochs=END2END_HAND_N_EPOCHS)

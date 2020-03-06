@@ -53,6 +53,145 @@ def hand_video_collate(batch):
     return inp_batch, inp_lens, target_batch, target_lens
 
 
+class PhoenixFullFeatDataset():
+    def __init__(self, vocab, split, max_batch_size, augment_temp=False):
+        if split == "train":
+            self.augment_temp = augment_temp
+        else:
+            self.augment_temp = False
+
+        self.max_batch_size = max_batch_size
+        self._build_dataset(split, vocab)
+
+    def _build_dataset(self, split, vocab):
+        prefix_dir = os.sep.join([VARS_DIR, "PhoenixFullFeatDataset", FRAME_FEAT_MODEL])
+        X_path = os.sep.join([prefix_dir, "X_" + split + ".pkl"])
+        Y_path = os.sep.join([prefix_dir, "Y_" + split + ".pkl"])
+        X_lens_path = os.sep.join([prefix_dir, "X_lens_" + split + ".pkl"])
+
+        if os.path.exists(X_path) and os.path.exists(Y_path) and os.path.exists(X_lens_path):
+            with open(X_path, 'rb') as f:
+                self.X = pickle.load(f)
+
+            with open(Y_path, 'rb') as f:
+                self.Y = pickle.load(f)
+
+            with open(X_lens_path, 'rb') as f:
+                self.X_lens = pickle.load(f)
+
+            self.length = len(self.X)
+
+        else:
+            df = get_pheonix_df(split)
+            self.length = df.shape[0]
+            self.X = []
+            self.Y = []
+            self.X_lens = []
+            for idx in range(self.length):
+                row = df.iloc[idx]
+                glosses = vocab.encode(row.annotation)
+                feat_file = os.sep.join([VIDEO_FEAT_DIR, split, row.folder]).replace("/*.png", ".npy")
+                video_feats = np.load(feat_file)
+                self.X.append(video_feats)
+                self.Y.append(glosses)
+                self.X_lens.append(len(video_feats))
+
+            if not os.path.exists(prefix_dir):
+                os.makedirs(prefix_dir)
+            with open(X_path, 'wb') as f:
+                pickle.dump(self.X, f)
+
+            with open(Y_path, 'wb') as f:
+                pickle.dump(self.Y, f)
+
+            with open(X_lens_path, 'wb') as f:
+                pickle.dump(self.X_lens, f)
+
+    def get_batch(self, idx):
+        batch_idxs = self.batches[idx]
+        X_batch = []
+        Y_lens = []
+        max_target_length = 0
+        for i in batch_idxs:
+            video = self._augment_video(self.X[i], self.X_aug_lens[i])
+            X_batch.append(video)
+            max_target_length = max(max_target_length, len(self.Y[i]))
+            Y_lens.append(len(self.Y[i]))
+
+        X_batch = torch.Tensor(np.array(X_batch))
+
+        Y_batch = np.zeros((len(batch_idxs), max_target_length))
+
+        for idx, i in enumerate(batch_idxs):
+            Y_batch[idx][:len(self.Y[i])] = self.Y[i]
+
+        Y_batch = torch.IntTensor(Y_batch)
+        Y_lens = torch.IntTensor(Y_lens)
+
+        return X_batch, Y_batch, Y_lens
+
+    def start_epoch(self, shuffle=True):
+        self.X_aug_lens = self._get_aug_input_lens()
+        len_table = dict()
+
+        for i, length in enumerate(self.X_aug_lens):
+            if length in len_table:
+                len_table[length].append(i)
+            else:
+                len_table[length] = [i]
+
+        self.batches = []
+        lenghts = list(len_table)
+
+        if shuffle:
+            random.shuffle(lenghts)
+
+        for l in lenghts:
+            idxs = len_table[l]
+            if shuffle:
+                random.shuffle(idxs)
+            s = 0
+            while (s < len(idxs)):
+                e = min(s + self.max_batch_size, len(idxs))
+
+                self.batches.append(idxs[s:e])
+
+                s += self.max_batch_size
+
+        return len(self.batches)
+
+    def _get_aug_input_lens(self):
+        if not self.augment_temp:
+            return self.X_lens
+
+        X_lens = []
+        for idx in range(self.length):
+            new_len = self._get_length_down_sample(self.X_lens[idx], len(self.Y[idx]))
+
+            X_lens.append(new_len)
+
+        return X_lens
+
+    def _get_length_down_sample(self, L, out_seq_len):
+        diff = L - out_seq_len * 4
+        if diff < 1:
+            return L
+
+        return int(L - 0.4 * random.rand() * diff)
+
+    def _down_sample(self, video, n):
+        video = np.array([video[int(i)] for i in np.linspace(0, len(video) - 1, n)])
+        return video
+
+    def _augment_video(self, video, n):
+
+        if self.augment_temp:
+            video = self._down_sample(video, n)
+            # video = self._frame_skip(video, n)
+
+        return video
+
+
 class PhoenixHandVideoDataset():
     def __init__(self, vocab, split, max_batch_size, augment_frame=True, augment_temp=True):
         if split == "train":

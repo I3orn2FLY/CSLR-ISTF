@@ -8,7 +8,7 @@ from torch.optim import RMSprop, Adam, SGD
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from numpy import random
 from models import SLR, weights_init
-from dataset import read_pheonix_cnn_feats, load_gloss_dataset
+from dataset import read_pheonix_cnn_feats, load_gloss_dataset, PhoenixFullFeatDataset
 
 from utils import ProgressPrinter, split_batches, Vocab
 from config import *
@@ -16,15 +16,6 @@ from config import *
 random.seed(0)
 
 torch.backends.cudnn.deterministic = True
-
-
-# TODO
-# training with dataset/augmentation
-# load to dgx
-# may be try with densenet
-
-# evaluate and try training samples,
-# if they are ok, try fix lstm weights and re-train temporal fusion with predicted glosses
 
 
 def predict_glosses(preds, decoder):
@@ -50,7 +41,7 @@ def predict_glosses(preds, decoder):
     return out_sentences
 
 
-def get_split_wer(model, device, X, y, vocab, batch_size=16, beam_search=False):
+def get_split_wer(model, device, X, Y, vocab, batch_size=16, beam_search=False):
     hypes = []
     gts = []
 
@@ -60,15 +51,15 @@ def get_split_wer(model, device, X, y, vocab, batch_size=16, beam_search=False):
                                            blank_id=0, log_probs_input=True)
 
     with torch.no_grad():
-        X_batches, y_batches = split_batches(X, y, batch_size, shuffle=False, target_format=2)
+        X_batches, Y_batches = split_batches(X, Y, batch_size, shuffle=False, target_format=2)
 
         for idx in range(len(X_batches)):
-            X_batch, y_batch = X_batches[idx], y_batches[idx]
+            X_batch, Y_batch = X_batches[idx], Y_batches[idx]
             inp = torch.Tensor(X_batch).unsqueeze(1).to(device)
             preds = model(inp).log_softmax(dim=2).permute(1, 0, 2)
             out_idx = predict_glosses(preds, decoder)
 
-            for gt in y_batch:
+            for gt in Y_batch:
                 gts += gt
 
             hypes += out_idx
@@ -78,71 +69,90 @@ def get_split_wer(model, device, X, y, vocab, batch_size=16, beam_search=False):
     return Lev.distance(hypes, gts) / len(gts) * 100
 
 
-def train_end2end(vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, n_epochs, batch_size, lr=0.001, mode=0):
-    device = DEVICE
-    model = SLR(rnn_hidden=512, vocab_size=vocab.size).to(device)
+def train(model, loaded, device, vocab, tr_dataset, val_dataset, n_epochs):
+    optimizer = Adam(model.parameters(), lr=LR_FULL)
 
-    if os.path.exists(END2END_FULL_MODEL_PATH):
-        model.load_state_dict(torch.load(END2END_FULL_MODEL_PATH))
-        print("Model Loaded")
-    else:
-        model.apply(weights_init)
-
-    optimizer = Adam(model.parameters(), lr=lr)
-
-    scheduler = ReduceLROnPlateau(optimizer, verbose=True, patience=5)
+    datasets = {"Train": tr_dataset, "Val": val_dataset}
     loss_fn = nn.CTCLoss(zero_infinity=True)
 
-    # if mode == 0:
-    #     objective = get_split_wer(model, device, X_dev, y_dev, vocab)
-    #     print("DEV WER:", objective)
-    # else:
-    #     objective = float("inf")
+    criterion_phase = CRIT_PHASE_END2END_FULL
+    best_wer_dir = os.sep.join([VARS_DIR, "PheonixWER"])
+    best_wer_file = os.sep.join([best_wer_dir, "END2END_FULL_" + criterion_phase + ".txt"])
+    if os.path.exists(best_wer_file) and loaded:
+        with open(best_wer_file, 'r') as f:
+            best_wer = float(f.readline().strip())
+            print("BEST " + criterion_phase + " WER:", best_wer)
+    else:
+        if not os.path.exists(best_wer_dir):
+            os.makedirs(best_wer_dir)
+        best_wer = float("inf")
 
     for epoch in range(1, n_epochs + 1):
         print("Epoch", epoch)
-        tr_losses = []
-        model.train()
-        X_batches, y_batches = split_batches(X_tr, y_tr, batch_size, target_format=1)
+        for phase in ['Train', 'Val']:
+            if phase == 'Train':
+                model.train()  # Set model to training mode
+            else:
+                model.eval()
 
-        pp = ProgressPrinter(len(y_batches), 10)
-        for idx in range(len(X_batches)):
-            optimizer.zero_grad()
-            X_batch, y_batch = X_batches[idx], y_batches[idx]
+            dataset = datasets[phase]
+            n_batches = dataset.start_epoch()
+            losses = []
+            hypes = []
+            gts = []
 
-            inp = torch.Tensor(X_batch).unsqueeze(1).to(device)
-            pred = model(inp).log_softmax(dim=2)
+            with torch.set_grad_enabled(phase == "Train"):
+                pp = ProgressPrinter(n_batches, 25)
+                for i in range(n_batches):
+                    optimizer.zero_grad()
+                    X_batch, Y_batch, Y_lens = dataset.get_batch(i)
+                    X_batch = torch.Tensor(X_batch).unsqueeze(1).to(device)
 
-            T, N, V = pred.shape
-            gt = torch.IntTensor(y_batch[0])
-            inp_lens = torch.full(size=(N,), fill_value=T, dtype=torch.int32)
-            gt_lens = torch.IntTensor(y_batch[1])
+                    preds = model(X_batch).log_softmax(dim=2)
 
-            loss = loss_fn(pred, gt, inp_lens, gt_lens)
-            tr_losses.append(loss.item())
-            loss.backward()
-            optimizer.step()
+                    T, N, V = preds.shape
+                    X_lens = torch.full(size=(N,), fill_value=T, dtype=torch.int32)
+                    loss = loss_fn(preds, Y_batch, X_lens, Y_lens)
 
-            pp.show(idx)
+                    if torch.isnan(loss):
+                        print("NAN!!")
 
-        print()
-        train_loss = np.mean(tr_losses)
-        print("Train Loss:", train_loss)
+                    losses.append(loss.item())
 
-        if mode == 0:
-            model.eval()
-            dev_wer = get_split_wer(model, device, X_dev, y_dev, vocab)
-            print("DEV WER:", dev_wer)
-            if dev_wer < objective:
-                test_wer = get_split_wer(model, device, X_test, y_test, vocab)
-                objective = dev_wer
-                torch.save(model.state_dict(), END2END_FULL_MODEL_PATH)
-                print("Model Saved", "TEST WER:", test_wer)
-                if scheduler:
-                    scheduler.step(dev_wer)
-        else:
-            if train_loss < objective:
-                objective = train_loss
+                    if phase == "Train":
+                        loss.backward()
+                        optimizer.step()
+
+                    out_sentences = predict_glosses(preds, decoder=None)
+                    gts += [y for y in Y_batch.view(-1).tolist() if y != 0]
+
+                    for sentence in out_sentences:
+                        hypes += sentence
+
+                    if i == 0:
+                        pred = " ".join(vocab.decode(out_sentences[0]))
+                        gt = Y_batch[0][:Y_lens[0]].tolist()
+                        gt = " ".join(vocab.decode(gt))
+                        print(phase, 'Ex. [' + pred + ']', '[' + gt + ']')
+
+                    if SHOW_PROGRESS:
+                        pp.show(i)
+
+                if SHOW_PROGRESS:
+                    pp.end()
+
+            hypes = "".join([chr(x) for x in hypes])
+            gts = "".join([chr(x) for x in gts])
+            phase_wer = Lev.distance(hypes, gts) / len(gts) * 100
+
+            phase_loss = np.mean(losses)
+            print(phase, "WER:", phase_wer, "Loss:", phase_loss)
+
+            if phase == criterion_phase and phase_wer < best_wer:
+                best_wer = phase_wer
+                with open(best_wer_file, 'w') as f:
+                    f.write(str(best_wer) + "\n")
+
                 torch.save(model.state_dict(), END2END_FULL_MODEL_PATH)
                 print("Model Saved")
 
@@ -150,7 +160,7 @@ def train_end2end(vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, n_epochs, bat
         print()
 
 
-def train_temp_fusion(vocab, X_tr, y_tr, X_dev, y_dev, n_epochs=100, batch_size=8192, lr=0.001):
+def train_temp_fusion(vocab, X_tr, Y_tr, X_dev, Y_dev, n_epochs=100, batch_size=8192, lr=0.001):
     print("Training temporal fusion model")
     device = DEVICE
     model = SLR(rnn_hidden=512, vocab_size=vocab.size).to(device)
@@ -165,14 +175,14 @@ def train_temp_fusion(vocab, X_tr, y_tr, X_dev, y_dev, n_epochs=100, batch_size=
     scheduler = ReduceLROnPlateau(optimizer, verbose=True, patience=5)
     scheduler = None
 
-    y_tr = torch.LongTensor(y_tr).to(device)
-    y_dev = torch.LongTensor(y_dev).to(device)
+    Y_tr = torch.LongTensor(Y_tr).to(device)
+    Y_dev = torch.LongTensor(Y_dev).to(device)
     X_dev = torch.Tensor(X_dev).to(device).unsqueeze(1)
 
     with torch.no_grad():
         pred = model(X_dev).permute([1, 0, 2]).squeeze()
 
-        best_dev_loss = loss_fn(pred, y_dev).item()
+        best_dev_loss = loss_fn(pred, Y_dev).item()
         print("DEV LOSS:", best_dev_loss)
 
     n_batches = len(X_tr) // batch_size + 1 * (len(X_tr) % batch_size != 0)
@@ -183,12 +193,12 @@ def train_temp_fusion(vocab, X_tr, y_tr, X_dev, y_dev, n_epochs=100, batch_size=
         for idx in range(n_batches):
             optimizer.zero_grad()
             start = idx * batch_size
-            end = min(start + batch_size, len(y_tr))
+            end = min(start + batch_size, len(Y_tr))
             X_batch = torch.Tensor(X_tr[start:end]).to(device).unsqueeze(1)
-            y_batch = y_tr[start:end]
+            Y_batch = Y_tr[start:end]
             out = model(X_batch).permute([1, 0, 2]).squeeze()
 
-            loss = loss_fn(out, y_batch)
+            loss = loss_fn(out, Y_batch)
             tr_losses.append(loss.item())
 
             loss.backward()
@@ -200,7 +210,7 @@ def train_temp_fusion(vocab, X_tr, y_tr, X_dev, y_dev, n_epochs=100, batch_size=
         with torch.no_grad():
             pred = model(X_dev).permute([1, 0, 2]).squeeze()
 
-            dev_loss = loss_fn(pred, y_dev).item()
+            dev_loss = loss_fn(pred, Y_dev).item()
 
             print("DEV LOSS:", dev_loss)
             if dev_loss < best_dev_loss:
@@ -215,11 +225,23 @@ def train_temp_fusion(vocab, X_tr, y_tr, X_dev, y_dev, n_epochs=100, batch_size=
 if __name__ == "__main__":
     vocab = Vocab(source="pheonix")
 
-    # X_tr, y_tr, X_dev, y_dev = load_gloss_dataset(with_blank=False)
-    # train_temp_fusion(vocab, X_tr, y_tr, X_dev, y_dev)
+    # X_tr, Y_tr, X_dev, Y_dev = load_gloss_dataset(with_blank=False)
+    # train_temp_fusion(vocab, X_tr, Y_tr, X_dev, Y_dev)
 
-    X_tr, y_tr = read_pheonix_cnn_feats("train", vocab, save=True)
-    X_test, y_test = read_pheonix_cnn_feats("test", vocab, save=True)
-    X_dev, y_dev = read_pheonix_cnn_feats("dev", vocab, save=True)
-    print()
-    train_end2end(vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, n_epochs=200, batch_size=2, mode=0)
+    tr_dataset = PhoenixFullFeatDataset(vocab, "train", max_batch_size=END2END_FULL_BATCH_SIZE,
+                                        augment_temp=AUG_HAND_TEMP)
+
+    val_dataset = PhoenixFullFeatDataset(vocab, "dev", max_batch_size=END2END_FULL_BATCH_SIZE)
+
+    device = torch.device(DEVICE)
+    model = SLR(rnn_hidden=512, vocab_size=vocab.size, temp_fusion_type=0).to(device)
+    load = True
+    if load and os.path.exists(END2END_FULL_MODEL_PATH):
+        loaded = True
+        model.load_state_dict(torch.load(END2END_FULL_MODEL_PATH, map_location=DEVICE))
+        print("Model Loaded")
+    else:
+        loaded = False
+        model.apply(weights_init)
+
+    train(model, loaded, device, vocab, tr_dataset, val_dataset, n_epochs=END2END_HAND_N_EPOCHS)

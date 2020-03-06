@@ -121,7 +121,7 @@ def pad_features(feats, VIDEO_SEQ_LEN):
     return padded_feats
 
 
-def split_batches(X, y, max_batch_size, shuffle=True, target_format=0):
+def split_batches(X, Y, max_batch_size, shuffle=True):
     # target format =>
     # 0 - concatenate targets and return targets(list), target_lengths(list)
     # 1 - pad targets and return targets (numpy matrix), target_lengths
@@ -137,7 +137,8 @@ def split_batches(X, y, max_batch_size, shuffle=True, target_format=0):
             len_table[l] = [idx]
 
     X_batches = []
-    y_batches = []
+    Y_batches = []
+    Y_lens_batches = []
 
     lenghts = list(len_table)
 
@@ -156,40 +157,25 @@ def split_batches(X, y, max_batch_size, shuffle=True, target_format=0):
             if e > len(idxs):
                 e = len(idxs)
 
+            # padded targets and lengths
+            max_length = float("-inf")
+            Y_lens = []
+
+            for idx in idxs[s:e]:
+                max_length = max(max_length, len(Y[idx]))
+
+            Y_batch = np.zeros((e - s, max_length))
+
+            for i, idx in enumerate(idxs[s:e]):
+                for j in range(len(Y[idx])):
+                    Y_batch[i][j] = Y[idx][j]
+
+                Y_lens.append(len(Y[idx]))
+
             X_batches.append([X[i] for i in idxs[s:e]])
-            if target_format == 0:
-                # concatenated targets and lengths
-                y_batch = []
-                y_lengths = []
-                for idx in idxs[s:e]:
-                    y_batch += y[idx]
-                    y_lengths.append(len(y[idx]))
-
-                y_batch = (y_batch, y_lengths)
-            elif target_format == 1:
-                # padded targets and lengths
-                max_length = float("-inf")
-                y_lengths = []
-
-                for idx in idxs[s:e]:
-                    max_length = max(max_length, len(y[idx]))
-
-                y_batch = np.zeros((e - s, max_length))
-
-                for i, idx in enumerate(idxs[s:e]):
-                    for j in range(len(y[idx])):
-                        y_batch[i][j] = y[idx][j]
-
-                    y_lengths.append(len(y[idx]))
-
-                y_batch = (y_batch, y_lengths)
-
-            else:
-                # just targets
-                y_batch = [y[i] for i in idxs[s:e]]
-
-            y_batches.append(y_batch)
+            Y_batches.append(Y_batch)
+            Y_lens_batches.append(Y_lens)
 
             s += max_batch_size
 
-    return X_batches, y_batches
+    return X_batches, Y_batches, Y_lens_batches
