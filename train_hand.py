@@ -75,7 +75,15 @@ def train(model, device, vocab, tr_dataset, val_dataset, n_epochs):
 
                     out_sentences = predict_glosses(preds, decoder=None)
                     gts += [y for y in Y_batch.view(-1).tolist() if y != 0]
-                    hypes += out_sentences
+
+                    for sentence in out_sentences:
+                        hypes += sentence
+
+                    if phase == criterion_phase and i == 0:
+                        pred = " ".join(vocab.decode(out_sentences[0]))
+                        gt = Y_batch[0][:Y_lens[0]].tolist()
+                        gt = " ".join(vocab.decode(gt))
+                        print('[' + pred + ']', '[' + gt + ']')
 
                     if SHOW_PROGRESS:
                         pp.show(i)
@@ -114,7 +122,7 @@ if __name__ == "__main__":
     model = SLR(rnn_hidden=512, vocab_size=vocab.size, temp_fusion_type=2).to(device)
     load = True
     if load and os.path.exists(END2END_HAND_MODEL_PATH):
-        model.load_state_dict(torch.load(END2END_HAND_MODEL_PATH))
+        model.load_state_dict(torch.load(END2END_HAND_MODEL_PATH, map_location=DEVICE))
         print("Model Loaded")
     else:
         model.apply(weights_init)

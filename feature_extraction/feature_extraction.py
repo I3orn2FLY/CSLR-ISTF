@@ -1,15 +1,58 @@
 import torch
-from torchvision import transforms
+import sys
 import glob
-from PIL import Image
-import time
 import numpy as np
-import pandas as pd
-from models import FrameFeatModel, SLR
-from config import *
-from utils import ProgressPrinter, split_batches, Vocab
-from dataset import read_pheonix, get_pheonix_df
 import cv2
+import os
+from PIL import Image
+from torchvision import transforms
+from models import FrameFeatModel, SLR
+from utils import ProgressPrinter, split_batches, Vocab
+from dataset import read_pheonix_cnn_feats, get_pheonix_df
+from pose import PoseEstimator
+
+sys.path.append(os.sep.join(["..", "*"]))
+from config import *
+
+
+def generate_openpose_features_split(pose_estimator, split):
+    with torch.no_grad():
+        df = get_pheonix_df(split)
+        print("Feature extraction:", split, "split")
+        L = df.shape[0]
+
+        pp = ProgressPrinter(L, 1)
+        for idx in range(L):
+            row = df.iloc[idx]
+            img_dir = os.sep.join([IMAGES_DIR, split, row.folder])
+            feat_dir = os.sep.join([POSE_FEAT_DIR, split, row.folder])
+            feat_file = feat_dir.replace("/*.png", "")
+
+            if os.path.exists(feat_file + ".npy"):
+                continue
+
+            feat_dir = os.path.split(feat_file)[0]
+
+            image_files = list(glob.glob(img_dir))
+            image_files.sort()
+
+            feats = pose_estimator.estimate_video_pose(image_files)
+
+            if not os.path.exists(feat_dir):
+                os.makedirs(feat_dir)
+            np.save(feat_file, feats)
+
+            pp.show(idx)
+
+        print()
+
+
+def generate_openpose_features():
+    pose_estimator = PoseEstimator()
+
+    generate_openpose_features_split(pose_estimator, "train")
+    generate_openpose_features_split(pose_estimator, "dev")
+    generate_openpose_features_split(pose_estimator, "test")
 
 
 def generate_cnn_features_split(model, device, preprocess, split):
@@ -176,7 +219,7 @@ def generate_gloss_dataset(with_blank=True):
     model.load_state_dict(torch.load(os.sep.join([WEIGHTS_DIR, "slr.pt"])))
     model.eval()
 
-    X_tr, y_tr = read_pheonix("train", vocab, save=True)
+    X_tr, y_tr = read_pheonix_cnn_feats("train", vocab, save=True)
     X_batches, y_batches = split_batches(X_tr, y_tr, 16, shuffle=False, target_format=2)
     stride = 4
     X = []
@@ -229,7 +272,8 @@ def generate_gloss_dataset(with_blank=True):
 
 
 if __name__ == "__main__":
-    # extract_features()
-    generate_numpy_videos(source=HANDS_DIR, dest=HANDS_NP_IMGS_DIR, side=HAND_SIZE)
+    generate_openpose_features()
+    # generate_cnn_features()
+    # generate_numpy_videos(source=HANDS_DIR, dest=HANDS_NP_IMGS_DIR, side=HAND_SIZE)
 
     # generate_gloss_dataset(with_blank=False)

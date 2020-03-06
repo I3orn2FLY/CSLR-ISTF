@@ -256,34 +256,34 @@ def get_pheonix_df(split):
 
 def load_gloss_dataset(with_blank=True):
     X_path = os.sep.join([VARS_DIR, "X_gloss_"])
-    y_path = os.sep.join([VARS_DIR, "y_gloss_"])
+    Y_path = os.sep.join([VARS_DIR, "Y_gloss_"])
     if not with_blank:
         X_path += "no_blank_"
-        y_path += "no_blank_"
+        Y_path += "no_blank_"
 
     X_tr = np.load(X_path + "train.npy")
-    y_tr = np.load(y_path + "train.npy")
+    Y_tr = np.load(Y_path + "train.npy")
     X_dev = np.load(X_path + "dev.npy")
-    y_dev = np.load(y_path + "dev.npy")
+    Y_dev = np.load(Y_path + "dev.npy")
 
-    return X_tr, y_tr, X_dev, y_dev
+    return X_tr, Y_tr, X_dev, Y_dev
 
 
-def read_pheonix(split, vocab, save=False, fix_shapes=False):
+def read_pheonix_cnn_feats(split, vocab, save=False, fix_shapes=False):
     suffix = "_" + FRAME_FEAT_MODEL + "_" + split
     if fix_shapes:
         suffix += "_" + str(VIDEO_SEQ_LEN)
     suffix += ".pkl"
 
-    X_path = os.sep.join([VARS_DIR, 'X' + suffix])
+    X_path = os.sep.join([VARS_DIR, "PheonixCNNFeats", 'X' + suffix])
 
-    y_path = os.sep.join([VARS_DIR, 'y' + suffix])
+    Y_path = os.sep.join([VARS_DIR, "PheonixCNNFeats",'Y' + suffix])
 
-    if os.path.exists(X_path) and os.path.exists(y_path):
+    if os.path.exists(X_path) and os.path.exists(Y_path):
         with open(X_path, 'rb') as f:
             X = pickle.load(f)
 
-        with open(y_path, 'rb') as f:
+        with open(Y_path, 'rb') as f:
             y = pickle.load(f)
 
         return X, y
@@ -316,10 +316,13 @@ def read_pheonix(split, vocab, save=False, fix_shapes=False):
     pp.end()
 
     if save:
+        dir = os.path.split(X_path)[0]
+        if not os.path.exists(dir):
+            os.makedirs(dir)
         with open(X_path, 'wb') as f:
             pickle.dump(X, f)
 
-        with open(y_path, 'wb') as f:
+        with open(Y_path, 'wb') as f:
             pickle.dump(y, f)
 
     return X, y

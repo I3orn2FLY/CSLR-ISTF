@@ -8,7 +8,7 @@ from torch.optim import RMSprop, Adam, SGD
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from numpy import random
 from models import SLR, weights_init
-from dataset import read_pheonix, load_gloss_dataset
+from dataset import read_pheonix_cnn_feats, load_gloss_dataset
 
 from utils import ProgressPrinter, split_batches, Vocab
 from config import *
@@ -33,7 +33,7 @@ def predict_glosses(preds, decoder):
         beam_result, beam_scores, timesteps, out_seq_len = decoder.decode(preds)
         for i in range(preds.size(0)):
             hypo = list(beam_result[i][0][:out_seq_len[i][0]])
-            out_sentences += hypo
+            out_sentences.append(hypo)
 
     else:
         preds = preds.argmax(dim=2).cpu().numpy()
@@ -45,7 +45,7 @@ def predict_glosses(preds, decoder):
                     continue
                 hypo.append(pred[i])
 
-            out_sentences += hypo
+            out_sentences.append(hypo)
 
     return out_sentences
 
@@ -65,7 +65,7 @@ def get_split_wer(model, device, X, y, vocab, batch_size=16, beam_search=False):
         for idx in range(len(X_batches)):
             X_batch, y_batch = X_batches[idx], y_batches[idx]
             inp = torch.Tensor(X_batch).unsqueeze(1).to(device)
-            preds = model(inp, 4).log_softmax(dim=2).permute(1, 0, 2)
+            preds = model(inp).log_softmax(dim=2).permute(1, 0, 2)
             out_idx = predict_glosses(preds, decoder)
 
             for gt in y_batch:
@@ -82,8 +82,8 @@ def train_end2end(vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, n_epochs, bat
     device = DEVICE
     model = SLR(rnn_hidden=512, vocab_size=vocab.size).to(device)
 
-    if os.path.exists(os.sep.join([WEIGHTS_DIR, "slr_temp_fusion.pt"])):
-        model.load_state_dict(torch.load(os.sep.join([WEIGHTS_DIR, "slr_temp_fusion.pt"])))
+    if os.path.exists(END2END_FULL_MODEL_PATH):
+        model.load_state_dict(torch.load(END2END_FULL_MODEL_PATH))
         print("Model Loaded")
     else:
         model.apply(weights_init)
@@ -111,7 +111,7 @@ def train_end2end(vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, n_epochs, bat
             X_batch, y_batch = X_batches[idx], y_batches[idx]
 
             inp = torch.Tensor(X_batch).unsqueeze(1).to(device)
-            pred = model(inp, 4).log_softmax(dim=2)
+            pred = model(inp).log_softmax(dim=2)
 
             T, N, V = pred.shape
             gt = torch.IntTensor(y_batch[0])
@@ -136,14 +136,14 @@ def train_end2end(vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, n_epochs, bat
             if dev_wer < objective:
                 test_wer = get_split_wer(model, device, X_test, y_test, vocab)
                 objective = dev_wer
-                torch.save(model.state_dict(), os.sep.join([WEIGHTS_DIR, "slr.pt"]))
+                torch.save(model.state_dict(), END2END_FULL_MODEL_PATH)
                 print("Model Saved", "TEST WER:", test_wer)
                 if scheduler:
                     scheduler.step(dev_wer)
         else:
             if train_loss < objective:
                 objective = train_loss
-                torch.save(model.state_dict(), os.sep.join([WEIGHTS_DIR, "slr.pt"]))
+                torch.save(model.state_dict(), END2END_FULL_MODEL_PATH)
                 print("Model Saved")
 
         print()
@@ -218,8 +218,8 @@ if __name__ == "__main__":
     # X_tr, y_tr, X_dev, y_dev = load_gloss_dataset(with_blank=False)
     # train_temp_fusion(vocab, X_tr, y_tr, X_dev, y_dev)
 
-    X_tr, y_tr = read_pheonix("train", vocab, save=True)
-    X_test, y_test = read_pheonix("test", vocab, save=True)
-    X_dev, y_dev = read_pheonix("dev", vocab, save=True)
+    X_tr, y_tr = read_pheonix_cnn_feats("train", vocab, save=True)
+    X_test, y_test = read_pheonix_cnn_feats("test", vocab, save=True)
+    X_dev, y_dev = read_pheonix_cnn_feats("dev", vocab, save=True)
     print()
-    train_end2end(vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, n_epochs=200, batch_size=8, mode=0)
+    train_end2end(vocab, X_tr, y_tr, X_dev, y_dev, X_test, y_test, n_epochs=200, batch_size=2, mode=0)
