@@ -115,8 +115,10 @@ def train(model, device, vocab, tr_dataset, val_dataset, n_epochs):
 
 if __name__ == "__main__":
     vocab = Vocab(source="pheonix")
-    tr_dataset = PhoenixHandVideoDataset(vocab, "train", augment=True, max_batch_size=END2END_HAND_BATCH_SIZE)
-    val_dataset = PhoenixHandVideoDataset(vocab, "dev", augment=False, max_batch_size=END2END_HAND_BATCH_SIZE)
+    tr_dataset = PhoenixHandVideoDataset(vocab, "train", max_batch_size=END2END_HAND_BATCH_SIZE,
+                                         augment_temp=AUG_HAND_TEMP, augment_frame=AUG_HAND_FRAME)
+
+    val_dataset = PhoenixHandVideoDataset(vocab, "dev", max_batch_size=END2END_HAND_BATCH_SIZE)
 
     device = torch.device(DEVICE)
     model = SLR(rnn_hidden=512, vocab_size=vocab.size, temp_fusion_type=2).to(device)

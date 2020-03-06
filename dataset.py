@@ -54,8 +54,14 @@ def hand_video_collate(batch):
 
 
 class PhoenixHandVideoDataset():
-    def __init__(self, vocab, split, augment, max_batch_size):
-        self.augment = augment
+    def __init__(self, vocab, split, max_batch_size, augment_frame=True, augment_temp=True):
+        if split != "train":
+            self.augment_temp = augment_temp
+            self.augment_frame = augment_frame
+        else:
+            self.augment_temp = False
+            self.augment_frame = False
+
         self.max_batch_size = max_batch_size
         self._build_dataset(split, vocab)
 
@@ -114,8 +120,8 @@ class PhoenixHandVideoDataset():
         max_target_length = 0
         for i in batch_idxs:
             video = np.load(self.X[i])
-            if self.augment:
-                video = self._augment_video(video, self.X_aug_lens[i])
+
+            video = self._augment_video(video, self.X_aug_lens[i])
 
             # for image in video:
             #     img = image.transpose([1, 2, 0])
@@ -132,7 +138,6 @@ class PhoenixHandVideoDataset():
 
         for idx, i in enumerate(batch_idxs):
             Y_batch[idx][:len(self.Y[i])] = self.Y[i]
-
 
         Y_batch = torch.IntTensor(Y_batch)
         Y_lens = torch.IntTensor(Y_lens)
@@ -170,7 +175,7 @@ class PhoenixHandVideoDataset():
         return len(self.batches)
 
     def _get_aug_input_lens(self):
-        if not self.augment:
+        if not self.augment_temp:
             return self.X_lens
 
         X_lens = []
@@ -181,7 +186,7 @@ class PhoenixHandVideoDataset():
 
         return X_lens
 
-    def _noise(self, video):
+    def _noise_video(self, video):
         video = video.astype(np.float32)
         video += 2 - 4 * random.rand(*video.shape)
 
@@ -191,17 +196,22 @@ class PhoenixHandVideoDataset():
         # video = video.astype(np.uint8)
         return video
 
-    def _crop(self, img):
-        img = img.transpose([1, 2, 0])
-        h, w = img.shape[:2]
-        y1, x1 = int(0.2 * random.rand() * h), int(0.2 * random.rand() * h)
-        y2, x2 = h - int(0.2 * random.rand() * h), w - int(0.2 * random.rand() * h)
+    def _crop_video(self, video):
 
-        img = img[y1:y2, x1:x2]
-        img = cv2.resize(img, (w, h))
+        for i, img in enumerate(video):
+            img = img.transpose([1, 2, 0])
+            h, w = img.shape[:2]
+            y1, x1 = int(0.2 * random.rand() * h), int(0.2 * random.rand() * h)
+            y2, x2 = h - int(0.2 * random.rand() * h), w - int(0.2 * random.rand() * h)
 
-        img = img.transpose([2, 0, 1])
-        return img
+            img = img[y1:y2, x1:x2]
+            img = cv2.resize(img, (w, h))
+
+            img = img.transpose([2, 0, 1])
+
+            video[i] = img
+
+        return video
 
     def _get_length_down_sample(self, L, out_seq_len):
         diff = L - out_seq_len * 4
@@ -236,15 +246,14 @@ class PhoenixHandVideoDataset():
     #     return video
 
     def _augment_video(self, video, n):
-        for i, img in enumerate(video):
-            video[i] = self._crop(img)
 
-        video = self._down_sample(video, n)
+        if self.augment_temp:
+            video = self._down_sample(video, n)
+            # video = self._frame_skip(video, n)
 
-        # if random.rand() < 0.7:
-        #     video = self._frame_skip(video, out_seq_len)
-
-        # video = self._noise(video)
+        if self.augment_frame:
+            video = self._crop_video(video)
+            video = self._noise_video(video)
 
         return video
 
@@ -277,7 +286,7 @@ def read_pheonix_cnn_feats(split, vocab, save=False, fix_shapes=False):
 
     X_path = os.sep.join([VARS_DIR, "PheonixCNNFeats", 'X' + suffix])
 
-    Y_path = os.sep.join([VARS_DIR, "PheonixCNNFeats",'Y' + suffix])
+    Y_path = os.sep.join([VARS_DIR, "PheonixCNNFeats", 'Y' + suffix])
 
     if os.path.exists(X_path) and os.path.exists(Y_path):
         with open(X_path, 'rb') as f:
