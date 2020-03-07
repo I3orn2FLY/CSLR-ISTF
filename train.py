@@ -21,13 +21,14 @@ torch.backends.cudnn.deterministic = True
 def predict_glosses(preds, decoder):
     out_sentences = []
     if decoder:
+        # need to check decoder for permutations of predictions
         beam_result, beam_scores, timesteps, out_seq_len = decoder.decode(preds)
         for i in range(preds.size(0)):
             hypo = list(beam_result[i][0][:out_seq_len[i][0]])
             out_sentences.append(hypo)
 
     else:
-        preds = preds.argmax(dim=2).cpu().numpy()
+        preds = preds.permute(1, 0, 2).argmax(dim=2).cpu().numpy()
         # glosses_batch = vocab.decode_batch(preds)
         for pred in preds:
             hypo = []

@@ -32,7 +32,6 @@ def generate_openpose_features_split(pose_estimator, split):
                 pp.omit()
                 continue
 
-
             feat_dir = os.path.split(feat_file)[0]
 
             image_files = list(glob.glob(img_dir))

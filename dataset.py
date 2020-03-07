@@ -92,6 +92,8 @@ class PhoenixFullFeatDataset():
                 glosses = vocab.encode(row.annotation)
                 feat_file = os.sep.join([VIDEO_FEAT_DIR, split, row.folder]).replace("/*.png", ".npy")
                 video_feats = np.load(feat_file)
+                if split == "train" and len(glosses) > video_feats.shape[0] // 4:
+                    continue
                 self.X.append(video_feats)
                 self.Y.append(glosses)
                 self.X_lens.append(len(video_feats))
@@ -111,19 +113,20 @@ class PhoenixFullFeatDataset():
         batch_idxs = self.batches[idx]
         X_batch = []
         Y_lens = []
-        max_target_length = 0
+
         for i in batch_idxs:
             video = self._augment_video(self.X[i], self.X_aug_lens[i])
             X_batch.append(video)
-            max_target_length = max(max_target_length, len(self.Y[i]))
             Y_lens.append(len(self.Y[i]))
 
         X_batch = torch.Tensor(np.array(X_batch))
 
-        Y_batch = np.zeros((len(batch_idxs), max_target_length))
+        max_target_length = max(Y_lens)
+        Y_batch = np.zeros((len(batch_idxs), max_target_length), dtype=np.int32)
 
-        for idx, i in enumerate(batch_idxs):
-            Y_batch[idx][:len(self.Y[i])] = self.Y[i]
+        for i, idx in enumerate(batch_idxs):
+            for j in range(len(self.Y[idx])):
+                Y_batch[i][j] = self.Y[idx][j]
 
         Y_batch = torch.IntTensor(Y_batch)
         Y_lens = torch.IntTensor(Y_lens)
