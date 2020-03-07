@@ -702,7 +702,7 @@ def read_pheonix_cnn_feats(split, vocab, save=False, fix_shapes=False):
 if __name__ == "__main__":
     vocab = Vocab()
     dataset = PhoenixHandVideoDataset(vocab, "train", max_batch_size=16,
-                                      augment_temp=AUG_HAND_TEMP, augment_frame=AUG_HAND_FRAME)
+                                      augment_temp=END2END_HAND_AUG_TEMP, augment_frame=END2END_HAND_AUG_FRAME)
 
     num_batches = dataset.start_epoch()
 
