@@ -82,11 +82,11 @@ def train(model, device, vocab, tr_dataset, val_dataset, n_epochs):
                     for sentence in out_sentences:
                         hypes += sentence
 
-                    if phase == criterion_phase and i == 0:
+                    if i == 0:
                         pred = " ".join(vocab.decode(out_sentences[0]))
                         gt = Y_batch[0][:Y_lens[0]].tolist()
                         gt = " ".join(vocab.decode(gt))
-                        print('[' + pred + ']', '[' + gt + ']')
+                        print(phase, 'Ex. [' + pred + ']', '[' + gt + ']')
 
                     if SHOW_PROGRESS:
                         pp.show(i)

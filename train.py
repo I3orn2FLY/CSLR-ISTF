@@ -230,7 +230,7 @@ if __name__ == "__main__":
     # train_temp_fusion(vocab, X_tr, Y_tr, X_dev, Y_dev)
 
     tr_dataset = PhoenixFullFeatDataset(vocab, "train", max_batch_size=END2END_FULL_BATCH_SIZE,
-                                        augment_temp=AUG_HAND_TEMP)
+                                        augment_temp=AUG_FULL_TEMP)
 
     val_dataset = PhoenixFullFeatDataset(vocab, "dev", max_batch_size=END2END_FULL_BATCH_SIZE)
 
