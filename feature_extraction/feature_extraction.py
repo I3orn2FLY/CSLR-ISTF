@@ -16,6 +16,7 @@ from config import *
 
 
 def generate_openpose_features_split(pose_estimator, split):
+    pose_feat_dir = os.sep.join([PHEONIX_DIR, "features", "pose"])
     with torch.no_grad():
         df = get_pheonix_df(split)
         print("Feature extraction:", split, "split")
@@ -25,7 +26,7 @@ def generate_openpose_features_split(pose_estimator, split):
         for idx in range(L):
             row = df.iloc[idx]
             img_dir = os.sep.join([IMAGES_DIR, split, row.folder])
-            feat_dir = os.sep.join([POSE_FEAT_DIR, split, row.folder])
+            feat_dir = os.sep.join([pose_feat_dir, split, row.folder])
             feat_file = feat_dir.replace("/*.png", "")
 
             if os.path.exists(feat_file + ".npy"):
