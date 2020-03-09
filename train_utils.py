@@ -37,10 +37,10 @@ def get_wer_info(mode, loaded):
 
     if mode == "Full":
         criterion_phase = END2END_FULL_CRIT_PHASE
-        best_wer_file = os.sep.join([best_wer_dir, "END2END_FULL_" + criterion_phase + ".txt"])
+        best_wer_file = os.sep.join([best_wer_dir, "end2end_full_" + FRAME_FEAT_MODEL + "_" + criterion_phase + ".txt"])
     else:
         criterion_phase = END2END_HAND_CRIT_PHASE
-        best_wer_file = os.sep.join([best_wer_dir, "END2END_HAND_" + criterion_phase + ".txt"])
+        best_wer_file = os.sep.join([best_wer_dir, "end2end_hand_" + criterion_phase + ".txt"])
 
     if os.path.exists(best_wer_file) and loaded:
         with open(best_wer_file, 'r') as f:
