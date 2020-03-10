@@ -126,6 +126,36 @@ class PhoenixEnd2EndDataset():
             with open(X_lens_path, 'wb') as f:
                 pickle.dump(self.X_lens, f)
 
+    def start_epoch(self, shuffle=True):
+        self.X_aug_lens, self.X_skipped_idxs = self._get_aug_input_lens()
+        len_table = dict()
+
+        for i, length in enumerate(self.X_aug_lens):
+            if length in len_table:
+                len_table[length].append(i)
+            else:
+                len_table[length] = [i]
+
+        self.batches = []
+        lenghts = list(len_table)
+
+        if shuffle:
+            random.shuffle(lenghts)
+
+        for l in lenghts:
+            idxs = len_table[l]
+            if shuffle:
+                random.shuffle(idxs)
+            s = 0
+            while (s < len(idxs)):
+                e = min(s + self.max_batch_size, len(idxs))
+
+                self.batches.append(idxs[s:e])
+
+                s += self.max_batch_size
+
+        return len(self.batches)
+
     def get_batch(self, idx):
         batch_idxs = self.batches[idx]
         X_batch = []
@@ -133,7 +163,7 @@ class PhoenixEnd2EndDataset():
         for i in batch_idxs:
             video = np.load(self.X[i])
 
-            video = self._augment_video(video, self.X_aug_lens[i])
+            video = self._augment_video(video, self.X_aug_lens[i], self.X_skipped_idxs[i])
 
             # for image in video:
             #     img = image.transpose([1, 2, 0])
@@ -143,7 +173,7 @@ class PhoenixEnd2EndDataset():
             X_batch.append(video)
             Y_lens.append(len(self.Y[i]))
 
-        X_batch = torch.Tensor(np.array(X_batch))
+        X_batch = torch.Tensor(np.stack(X_batch))
         if self.mode == "Full":
             X_batch = X_batch.unsqueeze(1)
 
@@ -159,47 +189,20 @@ class PhoenixEnd2EndDataset():
 
         return X_batch, Y_batch, Y_lens
 
-    def start_epoch(self, shuffle=True):
-        self.X_aug_lens = self._get_aug_input_lens()
-        len_table = dict()
-
-        for i, length in enumerate(self.X_aug_lens):
-            if length in len_table:
-                len_table[length].append(i)
-            else:
-                len_table[length] = [i]
-
-        self.batches = []
-        lenghts = list(len_table)
-
-        if shuffle:
-            random.shuffle(lenghts)
-
-        for l in lenghts:
-            idxs = len_table[l]
-            if shuffle:
-                random.shuffle(idxs)
-            s = 0
-            while (s < len(idxs)):
-                e = min(s + self.max_batch_size, len(idxs))
-
-                self.batches.append(idxs[s:e])
-
-                s += self.max_batch_size
-
-        return len(self.batches)
-
     def _get_aug_input_lens(self):
         if not self.augment_temp:
-            return self.X_lens
+            return self.X_lens, [[]] * self.length
 
-        X_lens = []
+        X_aug_lens = []
+        X_skipped_idxs = []
         for idx in range(self.length):
             new_len = self._get_length_down_sample(self.X_lens[idx], len(self.Y[idx]))
+            skipped_idxs = self._get_random_skip_idxs(new_len, len(self.Y[idx]))
 
-            X_lens.append(new_len)
+            X_skipped_idxs.append(skipped_idxs)
+            X_aug_lens.append(new_len - len(skipped_idxs))
 
-        return X_lens
+        return X_aug_lens, X_skipped_idxs
 
     def _noise_video(self, video):
         video = video.astype(np.float32)
@@ -212,7 +215,6 @@ class PhoenixEnd2EndDataset():
         return video
 
     def _crop_video(self, video):
-
         for i, img in enumerate(video):
             img = img.transpose([1, 2, 0])
             h, w = img.shape[:2]
@@ -233,385 +235,49 @@ class PhoenixEnd2EndDataset():
         if diff < 1:
             return L
 
-        return int(L - 0.4 * random.rand() * diff)
+        return int(L - DOWN_SAMPLE_FACTOR * random.rand() * diff)
 
-    def _down_sample(self, video, n):
-        video = np.array([video[int(i)] for i in np.linspace(0, len(video) - 1, n)])
-        return video
-
-    # def _frame_skip(self, video, out_seq_len):
-    #     diff = len(video) // 4 - out_seq_len
-    #     if diff < 3:
-    #         return video
-    #
-    #     idxs = np.linspace(0, len(video) - 1, diff + 1)
-    #
-    #     video = [img for img in video]
-    #
-    #     skipped = 0
-    #     for i in range(1, len(idxs)):
-    #         if np.random.rand() < 0.5:
-    #             step = idxs[i] - idxs[i - 1]
-    #             skip_idx = int(np.random.rand() * step + idxs[i - 1]) - skipped
-    #             skipped += 1
-    #             del video[skip_idx]
-    #
-    #     video = np.array(video)
-    #
-    #     return video
-
-    def _augment_video(self, video, n):
-
-        if self.augment_temp:
-            video = self._down_sample(video, n)
-            # video = self._frame_skip(video, n)
-
-        if self.augment_frame:
-            video = self._crop_video(video)
-            video = self._noise_video(video)
-
-        return video
-
-
-class PhoenixFullFeatDataset():
-    def __init__(self, vocab, split, max_batch_size, augment_temp=False):
-        if split == "train":
-            self.augment_temp = augment_temp
-        else:
-            self.augment_temp = False
-
-        self.max_batch_size = max_batch_size
-        self._build_dataset(split, vocab)
-
-    def _build_dataset(self, split, vocab):
-        prefix_dir = os.sep.join([VARS_DIR, "PhoenixFullFeatDataset", FRAME_FEAT_MODEL])
-        X_path = os.sep.join([prefix_dir, "X_" + split + ".pkl"])
-        Y_path = os.sep.join([prefix_dir, "Y_" + split + ".pkl"])
-        X_lens_path = os.sep.join([prefix_dir, "X_lens_" + split + ".pkl"])
-
-        if os.path.exists(X_path) and os.path.exists(Y_path) and os.path.exists(X_lens_path):
-            with open(X_path, 'rb') as f:
-                self.X = pickle.load(f)
-
-            with open(Y_path, 'rb') as f:
-                self.Y = pickle.load(f)
-
-            with open(X_lens_path, 'rb') as f:
-                self.X_lens = pickle.load(f)
-
-            self.length = len(self.X)
-
-        else:
-            df = get_pheonix_df(split)
-            self.length = df.shape[0]
-            self.X = []
-            self.Y = []
-            self.X_lens = []
-            for idx in range(self.length):
-                row = df.iloc[idx]
-                glosses = vocab.encode(row.annotation)
-                feat_file = os.sep.join([VIDEO_FEAT_DIR, split, row.folder]).replace("/*.png", ".npy")
-                video_feats = np.load(feat_file)
-                if split == "train" and len(glosses) > video_feats.shape[0] // 4:
-                    continue
-                self.X.append(video_feats)
-                self.Y.append(glosses)
-                self.X_lens.append(len(video_feats))
-
-            if not os.path.exists(prefix_dir):
-                os.makedirs(prefix_dir)
-            with open(X_path, 'wb') as f:
-                pickle.dump(self.X, f)
-
-            with open(Y_path, 'wb') as f:
-                pickle.dump(self.Y, f)
-
-            with open(X_lens_path, 'wb') as f:
-                pickle.dump(self.X_lens, f)
-
-    def get_batch(self, idx):
-        batch_idxs = self.batches[idx]
-        X_batch = []
-        Y_lens = []
-
-        for i in batch_idxs:
-            video = self._augment_video(self.X[i], self.X_aug_lens[i])
-            X_batch.append(video)
-            Y_lens.append(len(self.Y[i]))
-
-        X_batch = torch.Tensor(np.array(X_batch))
-
-        max_target_length = max(Y_lens)
-        Y_batch = np.zeros((len(batch_idxs), max_target_length), dtype=np.int32)
-
-        for i, idx in enumerate(batch_idxs):
-            for j in range(len(self.Y[idx])):
-                Y_batch[i][j] = self.Y[idx][j]
-
-        Y_batch = torch.IntTensor(Y_batch)
-        Y_lens = torch.IntTensor(Y_lens)
-
-        return X_batch, Y_batch, Y_lens
-
-    def start_epoch(self, shuffle=True):
-        self.X_aug_lens = self._get_aug_input_lens()
-        len_table = dict()
-
-        for i, length in enumerate(self.X_aug_lens):
-            if length in len_table:
-                len_table[length].append(i)
-            else:
-                len_table[length] = [i]
-
-        self.batches = []
-        lenghts = list(len_table)
-
-        if shuffle:
-            random.shuffle(lenghts)
-
-        for l in lenghts:
-            idxs = len_table[l]
-            if shuffle:
-                random.shuffle(idxs)
-            s = 0
-            while (s < len(idxs)):
-                e = min(s + self.max_batch_size, len(idxs))
-
-                self.batches.append(idxs[s:e])
-
-                s += self.max_batch_size
-
-        return len(self.batches)
-
-    def _get_aug_input_lens(self):
-        if not self.augment_temp:
-            return self.X_lens
-
-        X_lens = []
-        for idx in range(self.length):
-            new_len = self._get_length_down_sample(self.X_lens[idx], len(self.Y[idx]))
-
-            X_lens.append(new_len)
-
-        return X_lens
-
-    def _get_length_down_sample(self, L, out_seq_len):
+    def _get_random_skip_idxs(self, L, out_seq_len):
         diff = L - out_seq_len * 4
-        if diff < 1:
-            return L
+        if diff < 3:
+            return []
 
-        return int(L - 0.4 * random.rand() * diff)
+        skipped_idxs = []
+        idxs = np.linspace(0, L - 1, diff + 1)
 
-    def _down_sample(self, video, n):
-        video = np.array([video[int(i)] for i in np.linspace(0, len(video) - 1, n)])
-        return video
+        for i in range(1, len(idxs)):
+            if np.random.rand() < RANDOM_SKIP_TH:
+                step = idxs[i] - idxs[i - 1]
+                skip_idx = int(np.random.rand() * step + idxs[i - 1])
+                if not skipped_idxs or skip_idx != skipped_idxs[-1]:
+                    skipped_idxs.append(skip_idx)
 
-    def _augment_video(self, video, n):
-
-        if self.augment_temp:
-            video = self._down_sample(video, n)
-            # video = self._frame_skip(video, n)
-
-        return video
-
-
-class PhoenixHandVideoDataset():
-    def __init__(self, vocab, split, max_batch_size, augment_frame=True, augment_temp=True):
-        if split == "train":
-            self.augment_temp = augment_temp
-            self.augment_frame = augment_frame
-        else:
-            self.augment_temp = False
-            self.augment_frame = False
-
-        self.max_batch_size = max_batch_size
-        self._build_dataset(split, vocab)
-
-    def _build_dataset(self, split, vocab):
-        self.mean = np.load(os.path.join(VARS_DIR, os.path.split(HANDS_NP_IMGS_DIR)[1] + "_mean.npy"))
-        self.std = np.load(os.path.join(VARS_DIR, os.path.split(HANDS_NP_IMGS_DIR)[1] + "_std.npy"))
-
-        X_path = os.sep.join([VARS_DIR, "PhoenixHandVideoDataset", "X_" + split + ".pkl"])
-        Y_path = os.sep.join([VARS_DIR, "PhoenixHandVideoDataset", "Y_" + split + ".pkl"])
-        X_lens_path = os.sep.join([VARS_DIR, "PhoenixHandVideoDataset", "X_lens_" + split + ".pkl"])
-
-        if os.path.exists(X_path) and os.path.exists(Y_path) and os.path.exists(X_lens_path):
-            with open(X_path, 'rb') as f:
-                self.X = pickle.load(f)
-
-            with open(Y_path, 'rb') as f:
-                self.Y = pickle.load(f)
-
-            with open(X_lens_path, 'rb') as f:
-                self.X_lens = pickle.load(f)
-
-            self.length = len(self.X)
-
-        else:
-            df = get_pheonix_df(split)
-            self.length = df.shape[0]
-            self.X = []
-            self.Y = []
-            self.X_lens = []
-            for idx in range(self.length):
-                row = df.iloc[idx]
-                glosses = vocab.encode(row.annotation)
-                np_video_file = os.sep.join([HANDS_NP_IMGS_DIR, split, row.folder]).replace("/*.png", ".npy")
-                video = np.load(np_video_file)
-                self.X.append(np_video_file)
-                self.Y.append(glosses)
-                self.X_lens.append(len(video))
-
-            prefix_dir = os.sep.join([VARS_DIR, "PhoenixHandVideoDataset"])
-
-            if not os.path.exists(prefix_dir):
-                os.makedirs(prefix_dir)
-            with open(X_path, 'wb') as f:
-                pickle.dump(self.X, f)
-
-            with open(Y_path, 'wb') as f:
-                pickle.dump(self.Y, f)
-
-            with open(X_lens_path, 'wb') as f:
-                pickle.dump(self.X_lens, f)
-
-    def get_batch(self, idx):
-        batch_idxs = self.batches[idx]
-        X_batch = []
-        Y_lens = []
-        max_target_length = 0
-        for i in batch_idxs:
-            video = np.load(self.X[i])
-
-            video = self._augment_video(video, self.X_aug_lens[i])
-
-            # for image in video:
-            #     img = image.transpose([1, 2, 0])
-            #     cv2.imshow("WINDOW", img)
-            #     cv2.waitKey(0)
-
-            X_batch.append(video)
-            max_target_length = max(max_target_length, len(self.Y[i]))
-            Y_lens.append(len(self.Y[i]))
-
-        X_batch = torch.Tensor(np.array(X_batch))
-
-        Y_batch = np.zeros((len(batch_idxs), max_target_length))
-
-        for idx, i in enumerate(batch_idxs):
-            Y_batch[idx][:len(self.Y[i])] = self.Y[i]
-
-        Y_batch = torch.IntTensor(Y_batch)
-        Y_lens = torch.IntTensor(Y_lens)
-
-        return X_batch, Y_batch, Y_lens
-
-    def start_epoch(self, shuffle=True):
-        self.X_aug_lens = self._get_aug_input_lens()
-        len_table = dict()
-
-        for i, length in enumerate(self.X_aug_lens):
-            if length in len_table:
-                len_table[length].append(i)
-            else:
-                len_table[length] = [i]
-
-        self.batches = []
-        lenghts = list(len_table)
-
-        if shuffle:
-            random.shuffle(lenghts)
-
-        for l in lenghts:
-            idxs = len_table[l]
-            if shuffle:
-                random.shuffle(idxs)
-            s = 0
-            while (s < len(idxs)):
-                e = min(s + self.max_batch_size, len(idxs))
-
-                self.batches.append(idxs[s:e])
-
-                s += self.max_batch_size
-
-        return len(self.batches)
-
-    def _get_aug_input_lens(self):
-        if not self.augment_temp:
-            return self.X_lens
-
-        X_lens = []
-        for idx in range(self.length):
-            new_len = self._get_length_down_sample(self.X_lens[idx], len(self.Y[idx]))
-
-            X_lens.append(new_len)
-
-        return X_lens
-
-    def _noise_video(self, video):
-        video = video.astype(np.float32)
-        video += 2 - 4 * random.rand(*video.shape)
-
-        video = np.maximum(video, 0)
-        video = np.minimum(video, 255)
-
-        # video = video.astype(np.uint8)
-        return video
-
-    def _crop_video(self, video):
-
-        for i, img in enumerate(video):
-            img = img.transpose([1, 2, 0])
-            h, w = img.shape[:2]
-            y1, x1 = int(0.2 * random.rand() * h), int(0.2 * random.rand() * h)
-            y2, x2 = h - int(0.2 * random.rand() * h), w - int(0.2 * random.rand() * h)
-
-            img = img[y1:y2, x1:x2]
-            img = cv2.resize(img, (w, h))
-
-            img = img.transpose([2, 0, 1])
-
-            video[i] = img
-
-        return video
-
-    def _get_length_down_sample(self, L, out_seq_len):
-        diff = L - out_seq_len * 4
-        if diff < 1:
-            return L
-
-        return int(L - 0.4 * random.rand() * diff)
+        skipped_idxs.sort()
+        return skipped_idxs
 
     def _down_sample(self, video, n):
         video = np.array([video[int(i)] for i in np.linspace(0, len(video) - 1, n)])
         return video
 
-    # def _frame_skip(self, video, out_seq_len):
-    #     diff = len(video) // 4 - out_seq_len
-    #     if diff < 3:
-    #         return video
-    #
-    #     idxs = np.linspace(0, len(video) - 1, diff + 1)
-    #
-    #     video = [img for img in video]
-    #
-    #     skipped = 0
-    #     for i in range(1, len(idxs)):
-    #         if np.random.rand() < 0.5:
-    #             step = idxs[i] - idxs[i - 1]
-    #             skip_idx = int(np.random.rand() * step + idxs[i - 1]) - skipped
-    #             skipped += 1
-    #             del video[skip_idx]
-    #
-    #     video = np.array(video)
-    #
-    #     return video
+    def _random_skip(self, video, skipped_idxs):
+        res_video = []
 
-    def _augment_video(self, video, n):
+        for i in range(len(video)):
+            if skipped_idxs and i == skipped_idxs[0]:
+                skipped_idxs.pop(0)
+                continue
+
+            res_video.append(video[i])
+
+        res_video = np.stack(res_video)
+
+        return res_video
+
+    def _augment_video(self, video, n, skipped_idxs):
 
         if self.augment_temp:
-            video = self._down_sample(video, n)
-            # video = self._frame_skip(video, n)
+            video = self._down_sample(video, n + len(skipped_idxs))
+            video = self._random_skip(video, skipped_idxs)
 
         if self.augment_frame:
             video = self._crop_video(video)
@@ -701,13 +367,3 @@ def read_pheonix_cnn_feats(split, vocab, save=False, fix_shapes=False):
 
 if __name__ == "__main__":
     vocab = Vocab()
-    dataset = PhoenixHandVideoDataset(vocab, "train", max_batch_size=16,
-                                      augment_temp=END2END_HAND_AUG_TEMP, augment_frame=END2END_HAND_AUG_FRAME)
-
-    num_batches = dataset.start_epoch()
-
-    for i in range(num_batches):
-        X_batch, Y_batch, Y_lens = dataset.get_batch(i)
-        print()
-
-    print()

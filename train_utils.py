@@ -1,5 +1,5 @@
 import torch
-from torch.optim import Adam
+from torch.optim import Adam, RMSprop, SGD
 from models import SLR, weights_init
 from dataset import PhoenixEnd2EndDataset
 
@@ -61,7 +61,14 @@ def get_train_info(mode, model):
         n_epochs = END2END_HAND_N_EPOCHS
         lr = END2END_HAND_LR
 
-    optimizer = Adam(model.parameters(), lr=lr)
+
+
+    if END2END_TRAIN_OPTIMIZER == "Adam":
+        optimizer = Adam(model.parameters(), lr=lr)
+    elif END2END_TRAIN_OPTIMIZER == "RMSProp":
+        optimizer = RMSprop(model.parameters(), lr=lr)
+    else:
+        optimizer = SGD(model.parameters(), lr=lr)
 
     return optimizer, n_epochs
 
