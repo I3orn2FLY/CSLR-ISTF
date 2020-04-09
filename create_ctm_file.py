@@ -35,7 +35,7 @@ def create_ctm_file_split(split):
     model, loaded, model_path = get_model(END2END_TRAIN_MODE, vocab, END2END_TRAIN_LOAD)
     model.eval()
 
-    gt_ctm_val_file = os.sep.join([EVA_DIR, "phoenix2014-groundtruth-" + split + ".stm"])
+    gt_ctm_val_file = os.sep.join([PH_EVA_DIR, "phoenix2014-groundtruth-" + split + ".stm"])
 
     with open(gt_ctm_val_file, 'r') as f:
         lines = f.readlines()
@@ -48,7 +48,7 @@ def create_ctm_file_split(split):
     out_ctm_file = model_path.replace(model_path.split("_")[-1], split + ".ctm")
     out_ctm_file = os.path.split(out_ctm_file)[1]
 
-    with open(os.sep.join([EVA_DIR, out_ctm_file]), 'w') as f:
+    with open(os.sep.join([PH_EVA_DIR, out_ctm_file]), 'w') as f:
 
         with torch.no_grad():
             for idx, dir in enumerate(dirs):

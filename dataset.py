@@ -70,8 +70,8 @@ class PhoenixEnd2EndDataset():
         self._build_dataset(split, vocab)
 
     def _build_dataset(self, split, vocab):
-        self.mean = np.load(os.path.join(VARS_DIR, os.path.split(HANDS_NP_IMGS_DIR)[1] + "_mean.npy"))
-        self.std = np.load(os.path.join(VARS_DIR, os.path.split(HANDS_NP_IMGS_DIR)[1] + "_std.npy"))
+        self.mean = np.load(os.path.join(VARS_DIR, os.path.split(PH_HANDS_NP_IMGS_DIR)[1] + "_mean.npy"))
+        self.std = np.load(os.path.join(VARS_DIR, os.path.split(PH_HANDS_NP_IMGS_DIR)[1] + "_std.npy"))
 
         prefix_dir = os.sep.join([VARS_DIR, "PhoenixEnd2EndDataset", self.mode])
 
@@ -83,7 +83,7 @@ class PhoenixEnd2EndDataset():
         X_lens_path = os.sep.join([prefix_dir, "X_lens_" + split + ".pkl"])
 
         if self.mode == "Hand":
-            feat_dir = os.sep.join([HANDS_NP_IMGS_DIR, split])
+            feat_dir = os.sep.join([PH_HANDS_NP_IMGS_DIR, split])
         else:
             feat_dir = os.sep.join([VIDEO_FEAT_DIR, split])
 
@@ -162,6 +162,9 @@ class PhoenixEnd2EndDataset():
         Y_lens = []
         for i in batch_idxs:
             video = np.load(self.X[i])
+
+            if FRAME_FEAT_MODEL == "pose":
+                video = video.reshape(-1, 137, 3)
 
             video = self._augment_video(video, self.X_aug_lens[i], self.X_skipped_idxs[i])
 
@@ -287,7 +290,7 @@ class PhoenixEnd2EndDataset():
 
 
 def get_pheonix_df(split):
-    path = os.sep.join([ANNO_DIR, "manual", split + ".corpus.csv"])
+    path = os.sep.join([PH_ANNO_DIR, "manual", split + ".corpus.csv"])
     return pd.read_csv(path, sep='|')
 
 

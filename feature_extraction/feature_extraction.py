@@ -16,7 +16,14 @@ from config import *
 
 
 def generate_openpose_features_split(pose_estimator, split):
-    pose_feat_dir = os.sep.join([PHEONIX_DIR, "features", "pose"])
+    if SOURCE == "PH":
+        pose_feat_dir = os.sep.join([PHEONIX_DIR, "features", "pose"])
+    else:
+        pose_feat_dir = os.sep.join([KSRL_DIR, "features", "pose"])
+
+        if not os.path.exists(pose_feat_dir):
+            os.makedirs(pose_feat_dir)
+
     with torch.no_grad():
         df = get_pheonix_df(split)
         print("Feature extraction:", split, "split")
@@ -25,7 +32,7 @@ def generate_openpose_features_split(pose_estimator, split):
         pp = ProgressPrinter(L, 1)
         for idx in range(L):
             row = df.iloc[idx]
-            img_dir = os.sep.join([IMAGES_DIR, split, row.folder])
+            img_dir = os.sep.join([PH_IMAGES_DIR, split, row.folder])
             feat_dir = os.sep.join([pose_feat_dir, split, row.folder])
             feat_file = feat_dir.replace("/*.png", "")
 
@@ -66,7 +73,7 @@ def generate_cnn_features_split(model, device, preprocess, split):
         pp = ProgressPrinter(L, 10)
         for idx in range(L):
             row = df.iloc[idx]
-            img_dir = os.sep.join([IMAGES_DIR, split, row.folder])
+            img_dir = os.sep.join([PH_IMAGES_DIR, split, row.folder])
             feat_dir = os.sep.join([VIDEO_FEAT_DIR, split, row.folder])
             feat_file = feat_dir.replace("/*.png", "")
 

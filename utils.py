@@ -21,7 +21,7 @@ class Vocab(object):
             self._build_from_pheonix()
 
     def _build_from_pheonix(self):
-        with open(os.sep.join([ANNO_DIR, "automatic", "trainingClasses.txt"]), 'r') as f:
+        with open(os.sep.join([PH_ANNO_DIR, "automatic", "trainingClasses.txt"]), 'r') as f:
             lines = f.readlines()
 
         glosses = []
