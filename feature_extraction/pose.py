@@ -5,6 +5,7 @@ import os
 
 sys.path.append(os.path.join("..", "*"))
 from config import *
+
 sys.path.append(os.path.join(OPENPOSE_FOLDER, "build/python"))
 from openpose import pyopenpose as op
 
@@ -31,27 +32,53 @@ class PoseEstimator():
 
         return datum
 
-    def estimate_video_pose(self, image_files):
+    def estimate_video_pose(self, video):
         video_pose = []
 
-        for image_file in image_files:
-            frame = cv2.imread(image_file)
-            datum = self.estimate_pose(frame)
+        if isinstance(video, list):
+            for image_file in video:
+                frame = cv2.imread(image_file)
 
-            body = datum.poseKeypoints
-            try:
-                num_people = body.shape[0]
-            except:
-                continue
-            if num_people > 1 or num_people < 1: continue
-            body = body.squeeze()
-            face = datum.faceKeypoints.squeeze()
-            hleft = datum.handKeypoints[0].squeeze()
-            hright = datum.handKeypoints[1].squeeze()
-            pose_data = np.vstack((face, body, hleft, hright)).reshape(-1)
-            video_pose.append(pose_data)
+                pose = self.estimate_image_pose(frame)
+                if isinstance(pose, np.ndarray):
+                    video_pose.append(pose)
 
+
+        elif isinstance(video, str):
+            cap = cv2.VideoCapture(video)
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+
+                pose = self.estimate_image_pose(frame)
+                if isinstance(pose, np.ndarray):
+                    video_pose.append(pose)
+
+            cap.release()
 
         video_pose = np.array(video_pose)
 
         return video_pose
+
+    def estimate_image_pose(self, frame):
+        datum = self.estimate_pose(frame)
+
+        body = datum.poseKeypoints
+        try:
+            num_people = body.shape[0]
+        except:
+            return None
+
+        idx = 0
+        if num_people < 1:
+            return None
+        elif num_people > 1:
+            confs = np.sum(body, axis=1)[:, 2]
+            idx = np.argmax(confs)
+
+        body = body[idx]
+        face = datum.faceKeypoints[idx]
+        hleft = datum.handKeypoints[0][idx]
+        hright = datum.handKeypoints[1][idx]
+        return np.vstack((face, body, hleft, hright)).reshape(-1)

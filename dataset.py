@@ -309,64 +309,6 @@ def load_gloss_dataset(with_blank=True):
     return X_tr, Y_tr, X_dev, Y_dev
 
 
-def read_pheonix_cnn_feats(split, vocab, save=False, fix_shapes=False):
-    suffix = "_" + FRAME_FEAT_MODEL + "_" + split
-    if fix_shapes:
-        suffix += "_" + str(VIDEO_SEQ_LEN)
-    suffix += ".pkl"
-
-    X_path = os.sep.join([VARS_DIR, "PheonixCNNFeats", 'X' + suffix])
-
-    Y_path = os.sep.join([VARS_DIR, "PheonixCNNFeats", 'Y' + suffix])
-
-    if os.path.exists(X_path) and os.path.exists(Y_path):
-        with open(X_path, 'rb') as f:
-            X = pickle.load(f)
-
-        with open(Y_path, 'rb') as f:
-            y = pickle.load(f)
-
-        return X, y
-
-    df = get_pheonix_df(split)
-    X = []
-    y = []
-    print("Reading", split, "split")
-
-    pp = ProgressPrinter(df.shape[0], 25)
-    for idx in range(df.shape[0]):
-        row = df.iloc[idx]
-        text = row.annotation
-        feat_path = os.sep.join([VIDEO_FEAT_DIR, split, row.folder]).replace("/*.png", ".npy")
-        feats = np.load(feat_path)
-        if fix_shapes:
-            feats = pad_features(feats, VIDEO_SEQ_LEN)
-
-        vectors = vocab.encode(text)
-        if fix_shapes:
-            vectors = vectors[:MAX_OUT_LEN]
-        elif split == "train" and len(vectors) > feats.shape[0] // 4:
-            pp.omit()
-
-        X.append(feats)
-        y.append(vectors)
-
-        pp.show(idx)
-
-    pp.end()
-
-    if save:
-        dir = os.path.split(X_path)[0]
-        if not os.path.exists(dir):
-            os.makedirs(dir)
-        with open(X_path, 'wb') as f:
-            pickle.dump(X, f)
-
-        with open(Y_path, 'wb') as f:
-            pickle.dump(y, f)
-
-    return X, y
-
 
 if __name__ == "__main__":
     vocab = Vocab()

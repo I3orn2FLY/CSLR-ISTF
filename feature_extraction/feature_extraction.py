@@ -8,7 +8,7 @@ from PIL import Image
 from torchvision import transforms
 from models import FrameFeatModel, SLR
 from utils import ProgressPrinter, Vocab
-from dataset import read_pheonix_cnn_feats, get_pheonix_df
+from dataset import get_pheonix_df
 from pose import PoseEstimator
 
 sys.path.append(os.sep.join(["..", "*"]))
