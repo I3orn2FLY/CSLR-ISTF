@@ -1,26 +1,21 @@
 import time
-import numpy as np
 from config import *
 import pandas as pd
-import pickle
 import glob
-import torch
-import cv2
 from numpy import random
-
-from PIL import Image
-from torchvision import transforms
 
 
 class Vocab(object):
-    def __init__(self, source="pheonix"):
+    def __init__(self):
         self.idx2gloss = ["-"]
         self.gloss2idx = {"-": 0}
         self.size = 1
-        if source == "pheonix":
-            self._build_from_pheonix()
+        if SOURCE == "PH":
+            self._build_from_PH()
+        else:
+            self._build_from_KSRL()
 
-    def _build_from_pheonix(self):
+    def _build_from_PH(self):
         with open(os.sep.join([PH_ANNO_DIR, "automatic", "trainingClasses.txt"]), 'r') as f:
             lines = f.readlines()
 
@@ -30,6 +25,25 @@ class Vocab(object):
             if gloss[-1] != '0':
                 continue
             glosses.append(gloss[:-1])
+
+        for idx, gloss in enumerate(glosses):
+            self.idx2gloss.append(gloss)
+            self.gloss2idx[gloss] = idx + 1
+
+        self.size = len(self.idx2gloss)
+
+        print("Vocabulary of length:", len(self.idx2gloss), "(blank included)")
+
+    def _build_from_KSRL(self):
+        with open(os.sep.join([KRSL_ANNO_DIR, "vocabulary.txt"]), 'r') as f:
+            lines = f.readlines()
+
+        glosses = []
+        for line in lines:
+            gloss = line.strip()
+            if len(gloss) < 1:
+                continue
+            glosses.append(gloss)
 
         for idx, gloss in enumerate(glosses):
             self.idx2gloss.append(gloss)
@@ -91,6 +105,15 @@ class ProgressPrinter():
     def end(self):
         print("\rProgress: 100%")
 
+def get_pheonix_df(split):
+    path = os.sep.join([PH_ANNO_DIR, "manual", split + ".corpus.csv"])
+    return pd.read_csv(path, sep='|')
+
+
+def get_KRSL_df(split):
+    path = os.sep.join([KRSL_ANNO_DIR, split + ".csv"])
+    df = pd.read_csv(path)
+    return df
 
 def create_annotation():
     def get_PSR(video_file):
@@ -102,7 +125,54 @@ def create_annotation():
 
         return P, S, R
 
-    video_files = os.sep.join([KSRL_VIDEOS_DIR, "**", "*.*"])
+    def get_anno_and_avoid_list():
+        df = pd.read_csv(os.path.join(KRSL_ANNO_DIR, "annotation.csv"), header=None)
+        avoid_list = []
+        vocab = set()
+        with open(os.path.join(KRSL_ANNO_DIR, "176_phrases"), 'r') as f:
+            anno = {}
+            for line in f.readlines():
+                sent = line.strip().replace(',', '').lower().split()
+
+                idx = int(sent[0])
+                gloss = " ".join(df.iloc[idx][1].strip().replace(',', '').replace("(вопрос)", '').lower().split())
+
+                trans = " ".join(df.iloc[idx][0].strip().lower().split())
+
+                if '(' in gloss:
+                    avoid_list.append(idx)
+                else:
+                    for word in gloss.split():
+                        vocab.add(word)
+                anno[int(sent[0])] = (gloss, trans)
+
+        with open(os.path.join(KRSL_ANNO_DIR, "vocabulary.txt"), 'w') as f:
+            for word in sorted(list(vocab)):
+                f.write(word + os.linesep)
+
+        return anno, avoid_list
+
+    def create_anno_split(split_data, split_name, anno):
+        P_ids = []
+        S_ids = []
+        videos = split_data
+        glosses = []
+        trans = []
+
+        for video_path in videos:
+            P, S, R = get_PSR(video_path)
+            P_ids.append(P)
+            S_ids.append(S)
+            glosses.append(anno[S][0])
+            trans.append(anno[S][1])
+
+        df = pd.DataFrame({"P_id": P_ids, "S_id": S_ids, "video": videos, "annotation": glosses, "translation": trans})
+        df.to_csv(os.path.join(KRSL_ANNO_DIR, split_name + ".csv"), index=None)
+        print(split_name, df.shape[0])
+
+    anno, avoid_list = get_anno_and_avoid_list()
+
+    video_files = os.sep.join([KRSL_VIDEOS_DIR, "**", "*.*"])
 
     video_files = list(glob.glob(video_files))
     video_files.sort()
@@ -110,9 +180,12 @@ def create_annotation():
 
     video_n = 0
     for idx, video_file in enumerate(video_files):
-        video_path = video_file.replace(KSRL_VIDEOS_DIR + os.sep, "")
+        video_path = video_file.replace(KRSL_VIDEOS_DIR + os.sep, "")
 
         P, S, R = get_PSR(video_file)
+
+        if S in avoid_list:
+            continue
 
         P_data = data_table.get(P, {})
         data_table[P] = P_data
@@ -129,11 +202,12 @@ def create_annotation():
             S_count += [S] * len(data_table[P][S])
             person_count += [P] * len(data_table[P][S])
 
-    sents = set(list(range(176)))
-    for p in data_table:
-        print(p, sents - set(list(data_table[p])))
+    # sents = set(list(range(176)))
+    # for p in data_table:
+    #     print(p, sents - set(list(data_table[p])))
+    #
+    # exit(0)
 
-    exit(0)
     P_val = int(random.rand() * 20)
     P_test = int(random.rand() * 20)
     while P_val == P_test:
@@ -159,7 +233,7 @@ def create_annotation():
 
     P_train = set(data_table) - P_val.union(P_test)
 
-    S_n = 875 / len(P_train)
+    S_n = (175 - len(avoid_list)) * 5 / len(P_train)
 
     for P in P_train:
         sents = list(data_table[P])
@@ -179,35 +253,7 @@ def create_annotation():
 
             data_train += R_data
 
-    # print(P_train, P_val, P_test)
-    # print(len(data_train), len(data_val), len(data_test))
-    # print(len(data_train) + len(data_val) + len(data_test), video_n)
-    # print(set(data_train).intersection(set(data_val)))
-    # print(set(data_train).intersection(set(data_test)))
-    # print(set(data_val).intersection(set(data_test)))
-
     random.shuffle(data_train)
-
-    with open(os.path.join(KSRL_ANNO_DIR, "176_phrases"), 'r') as f:
-        anno = {}
-        for line in f.readlines():
-            sent = line.strip().lower().split()
-            anno[int(sent[0])] = " ".join(word.strip() for word in sent[1:])
-
-    def create_anno_split(split_data, split_name, anno):
-        P_ids = []
-        S_ids = []
-        videos = split_data
-        annos = []
-
-        for video_path in videos:
-            P, S, R = get_PSR(video_path)
-            P_ids.append(P)
-            S_ids.append(S)
-            annos.append(anno[S])
-
-        df = pd.DataFrame({"P_id": P_ids, "S_id": S_ids, "video": videos, "annotation": annos})
-        df.to_csv(os.path.join(KSRL_ANNO_DIR, split_name + ".csv"), index=None)
 
     create_anno_split(data_train, "train", anno)
     create_anno_split(data_val, "val", anno)
@@ -217,3 +263,6 @@ def create_annotation():
 if __name__ == "__main__":
     random.seed(0)
     create_annotation()
+    vocab = Vocab()
+
+    # print(vocab.idx2gloss)

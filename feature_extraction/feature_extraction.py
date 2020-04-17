@@ -1,14 +1,11 @@
 import torch
 import sys
-import glob
 import numpy as np
 import cv2
-import os
 from PIL import Image
 from torchvision import transforms
-from models import FrameFeatModel, SLR
-from utils import ProgressPrinter, Vocab
-from dataset import get_pheonix_df
+from models import FrameFeatModel
+from utils import *
 from pose import PoseEstimator
 
 sys.path.append(os.sep.join(["..", "*"]))
@@ -17,9 +14,9 @@ from config import *
 
 def generate_openpose_features_split(pose_estimator, split):
     if SOURCE == "PH":
-        pose_feat_dir = os.sep.join([PHEONIX_DIR, "features", "pose"])
+        pose_feat_dir = os.sep.join([PH_DIR, "features", "pose"])
     else:
-        pose_feat_dir = os.sep.join([KSRL_DIR, "features", "pose"])
+        pose_feat_dir = os.sep.join([KRSL_DIR, "features", "pose"])
 
         if not os.path.exists(pose_feat_dir):
             os.makedirs(pose_feat_dir)

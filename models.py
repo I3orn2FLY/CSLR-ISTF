@@ -83,13 +83,13 @@ class TempFusion(nn.Module):
         self.pool2 = nn.MaxPool2d(kernel_size=(2, 1), stride=(2, 1))
 
     def forward(self, x):
-        # (batch_size, 1, max_seq_length, 1024)
+        # (batch_size, 1, max_seq_length, 1024 or 411)
         x = self.conv1d_1(x)
         x = self.pool1(x)
         x = self.conv1d_2(x)
         x = self.pool2(x)
         x = x.squeeze(1)
-        # (batch_size, max_seq_length // 4, 1024)
+        # (batch_size, max_seq_length // 4, 1024 or 411)
         return x
 
 
@@ -111,23 +111,6 @@ class TempFusion_VGG_S(nn.Module):
         x = batch_feats.unsqueeze(1)
         x = self.simple_temp_fusion(x)
         return x
-
-
-class TempFusionFixedVL(nn.Module):
-    def __init__(self):
-        super(TempFusionFixedVL, self).__init__()
-
-        self.conv1d_1 = nn.Conv2d(1, 1, kernel_size=(5, 1))
-        self.pool1 = nn.MaxPool2d(kernel_size=(2, 1), stride=(2, 1))
-        self.conv1d_2 = nn.Conv2d(1, 1, kernel_size=(5, 1))
-        self.pool2 = nn.MaxPool2d(kernel_size=(2, 1), stride=(2, 1))
-
-    def forward(self, x):
-        x = self.conv1d_1(x)
-        x = self.pool1(x)
-        x = self.conv1d_2(x)
-        x = self.pool2(x)
-        return x.squeeze(1)
 
 
 class BiLSTM(nn.Module):
@@ -172,8 +155,6 @@ class SLR(nn.Module):
         self.vgg_s = None
         if temp_fusion_type == 0:
             self.temp_fusion = TempFusion()
-        elif temp_fusion_type == 1:
-            self.temp_fusion = TempFusionFixedVL()
         else:
             self.temp_fusion = TempFusion_VGG_S()
 

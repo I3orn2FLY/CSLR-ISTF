@@ -40,9 +40,14 @@ def train(mode, model, loaded, model_path, vocab, datasets):
                     optimizer.zero_grad()
                     X_batch, Y_batch, Y_lens = dataset.get_batch(i)
                     X_batch = X_batch.to(DEVICE)
+                    L = X_batch.size()[-2]
+                    if L < 4 * Y_lens.max().item():
+                        batch = dataset.batches[i]
+                        paths = [dataset.X[k] for k in batch]
+                        print(paths)
+                        continue
 
                     preds = model(X_batch).log_softmax(dim=2)
-
                     T, N, V = preds.shape
                     X_lens = torch.full(size=(N,), fill_value=T, dtype=torch.int32)
                     loss = loss_fn(preds, Y_batch, X_lens, Y_lens)
@@ -90,7 +95,7 @@ def train(mode, model, loaded, model_path, vocab, datasets):
 
 
 if __name__ == "__main__":
-    vocab = Vocab(source="pheonix")
+    vocab = Vocab()
 
     model, loaded, model_path = get_model(END2END_TRAIN_MODE, vocab, END2END_TRAIN_LOAD)
     datasets = get_datasets(END2END_TRAIN_MODE, vocab)

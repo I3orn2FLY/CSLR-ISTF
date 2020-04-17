@@ -1,7 +1,7 @@
 import torch
 from torch.optim import Adam, RMSprop, SGD
 from models import SLR, weights_init
-from dataset import PhoenixEnd2EndDataset
+from dataset import PhoenixEnd2EndDataset, KRSLEnd2EndDataset
 
 from config import *
 
@@ -31,7 +31,10 @@ def predict_glosses(preds, decoder):
 
 
 def get_wer_info(mode, loaded):
-    best_wer_dir = os.sep.join([VARS_DIR, "PheonixWER"])
+    if SOURCE == "PH":
+        best_wer_dir = os.sep.join([VARS_DIR, "Phoenix_WER"])
+    else:
+        best_wer_dir = os.sep.join([VARS_DIR, "KRSL_WER"])
     if not os.path.exists(best_wer_dir):
         os.makedirs(best_wer_dir)
 
@@ -61,8 +64,6 @@ def get_train_info(mode, model):
         n_epochs = END2END_HAND_N_EPOCHS
         lr = END2END_HAND_LR
 
-
-
     if END2END_TRAIN_OPTIMIZER == "Adam":
         optimizer = Adam(model.parameters(), lr=lr)
     elif END2END_TRAIN_OPTIMIZER == "RMSProp":
@@ -77,6 +78,10 @@ def save_model(model, model_path, best_wer, best_wer_file):
     with open(best_wer_file, 'w') as f:
         f.write(str(best_wer) + "\n")
 
+    model_dir = os.path.split(model_path)[0]
+    if not os.path.exists(model_dir):
+        os.makedirs(model_dir)
+
     torch.save(model.state_dict(), model_path)
     print("Model Saved")
 
@@ -86,7 +91,7 @@ def get_model(mode, vocab, load=False):
         temp_fusion_type = 0
         model_path = END2END_FULL_MODEL_PATH
     else:
-        temp_fusion_type = 2
+        temp_fusion_type = 1
         model_path = END2END_HAND_MODEL_PATH
 
     model = SLR(rnn_hidden=512, vocab_size=vocab.size, temp_fusion_type=temp_fusion_type).to(DEVICE)
@@ -111,10 +116,16 @@ def get_datasets(mode, vocab):
         aug_temp = END2END_HAND_AUG_TEMP
         aug_frame = END2END_HAND_AUG_FRAME
 
-    tr_dataset = PhoenixEnd2EndDataset(mode, vocab, "train", max_batch_size=batch_size,
-                                       augment_temp=aug_temp, augment_frame=aug_frame)
+    if SOURCE == "PH":
+        tr_dataset = PhoenixEnd2EndDataset(mode, vocab, "train", max_batch_size=batch_size,
+                                           augment_temp=aug_temp, augment_frame=aug_frame)
 
-    val_dataset = PhoenixEnd2EndDataset(mode, vocab, "dev", max_batch_size=batch_size)
+        val_dataset = PhoenixEnd2EndDataset(mode, vocab, "dev", max_batch_size=batch_size)
+    else:
+        tr_dataset = KRSLEnd2EndDataset(mode, vocab, "train", max_batch_size=batch_size,
+                                        augment_temp=aug_temp, augment_frame=aug_frame)
+
+        val_dataset = KRSLEnd2EndDataset(mode, vocab, "val", max_batch_size=batch_size)
 
     datasets = {"Train": tr_dataset, "Val": val_dataset}
 
