@@ -86,7 +86,7 @@ def generate_cnn_features_split(model, device, preprocess, split, batch_size):
         print()
 
 
-def generate_cnn_features(batch_size=512):
+def generate_cnn_features(batch_size=FEAT_EX_BATCH_SIZE):
     if FRAME_FEAT_MODEL in ["pose"]:
         print("Incorrect feature extraction model:", FRAME_FEAT_MODEL)
         exit(0)
