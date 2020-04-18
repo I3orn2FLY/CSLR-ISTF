@@ -11,34 +11,62 @@ sys.path.append(os.sep.join(["..", "*"]))
 from config import *
 
 
+def get_images_files(video_dir):
+    if SOURCE == "PH":
+        image_files = list(glob.glob(video_dir))
+        image_files.sort()
+
+        images = [Image.open(img_file) for img_file in image_files]
+    else:
+        images = []
+        cap = cv2.VideoCapture(video_dir)
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            im_pil = Image.fromarray(frame)
+            images.append(im_pil)
+        cap.release()
+
+    return images
+
+
 def generate_cnn_features_split(model, device, preprocess, split):
     with torch.no_grad():
-        df = get_pheonix_df(split)
-        print("Feature extraction:", split, "split")
+        if SOURCE == "PH":
+            df = get_pheonix_df(split)
+        else:
+            df = get_KRSL_df(split)
+
+        print(SOURCE, "Feature extraction:", split, "split")
         L = df.shape[0]
 
         pp = ProgressPrinter(L, 10)
         for idx in range(L):
             row = df.iloc[idx]
-            img_dir = os.sep.join([PH_IMAGES_DIR, split, row.folder])
-            feat_dir = os.sep.join([VIDEO_FEAT_DIR, split, row.folder])
-            feat_file = feat_dir.replace("/*.png", "")
+            if SOURCE == "PH":
+                video_dir = os.sep.join([VIDEOS_DIR, split, row.folder])
+                feat_file = os.sep.join([VIDEO_FEAT_DIR, split, row.folder]).replace("/*.png", ".npy")
+            else:
+                video_dir = os.path.join(VIDEOS_DIR, row.video)
+                feat_file = os.path.join(VIDEO_FEAT_DIR, row.video).replace(".mp4", ".npy")
 
-            if os.path.exists(feat_file + ".npy"):
+            if os.path.exists(feat_file):
+                pp.omit()
                 continue
 
             feat_dir = os.path.split(feat_file)[0]
 
-            image_files = list(glob.glob(img_dir))
-            image_files.sort()
+            images = get_images_files(video_dir)
 
-            images = [Image.open(img_file) for img_file in image_files]
             inp = torch.stack([preprocess(image) for image in images])
             inp = inp.to(device)
             feats = model(inp).cpu().numpy()
 
             if not os.path.exists(feat_dir):
                 os.makedirs(feat_dir)
+
             np.save(feat_file, feats)
 
             pp.show(idx)
@@ -47,6 +75,10 @@ def generate_cnn_features_split(model, device, preprocess, split):
 
 
 def generate_cnn_features():
+    if FRAME_FEAT_MODEL in ["pose"]:
+        print("Incorrect feature extraction model:", FRAME_FEAT_MODEL)
+        exit(0)
+
     device = DEVICE
     model = FrameFeatModel().to(device)
     model.eval()
@@ -62,8 +94,9 @@ def generate_cnn_features():
     generate_cnn_features_split(model, device, preprocess, "test")
     generate_cnn_features_split(model, device, preprocess, "dev")
 
+
 # def generate_gloss_dataset(with_blank=True):
-#     vocab = Vocab(source="pheonix")
+#     vocab = Vocab()
 #     device = DEVICE
 #     model = SLR(rnn_hidden=512, vocab_size=vocab.size).to(device)
 #     model.load_state_dict(torch.load(os.sep.join([WEIGHTS_DIR, "slr.pt"])))
@@ -119,3 +152,9 @@ def generate_cnn_features():
 #
 #     print(X_tr.shape, y_tr.shape)
 #     print(X_dev.shape, y_dev.shape)
+
+
+if __name__ == "__main__":
+    generate_cnn_features()
+
+    # generate_gloss_dataset(with_blank=False)

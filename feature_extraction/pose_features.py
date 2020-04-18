@@ -9,36 +9,37 @@ from config import *
 
 
 def generate_openpose_features_split(pose_estimator, split):
-    if SOURCE == "PH":
-        pose_feat_dir = os.sep.join([PH_DIR, "features", "pose"])
-    else:
-        pose_feat_dir = os.sep.join([KRSL_DIR, "features", "pose"])
-
-        if not os.path.exists(pose_feat_dir):
-            os.makedirs(pose_feat_dir)
-
     with torch.no_grad():
-        df = get_pheonix_df(split)
-        print("Feature extraction:", split, "split")
+        if SOURCE == "PH":
+            df = get_pheonix_df(split)
+        else:
+            df = get_KRSL_df(split)
+        print(SOURCE, "Feature extraction:", FRAME_FEAT_MODEL, split, "split")
         L = df.shape[0]
 
         pp = ProgressPrinter(L, 1)
         for idx in range(L):
             row = df.iloc[idx]
-            img_dir = os.sep.join([PH_IMAGES_DIR, split, row.folder])
-            feat_dir = os.sep.join([pose_feat_dir, split, row.folder])
-            feat_file = feat_dir.replace("/*.png", "")
+            if SOURCE == "PH":
+                video_dir = os.sep.join([VIDEOS_DIR, split, row.folder])
+                feat_file = os.sep.join([VIDEO_FEAT_DIR, split, row.folder]).replace("/*.png", ".npy")
+            else:
+                video_dir = os.path.join(VIDEOS_DIR, row.video)
+                feat_file = os.path.join(VIDEO_FEAT_DIR, row.video).replace(".mp4", ".npy")
 
-            if os.path.exists(feat_file + ".npy"):
+            if os.path.exists(feat_file):
                 pp.omit()
                 continue
 
             feat_dir = os.path.split(feat_file)[0]
 
-            image_files = list(glob.glob(img_dir))
-            image_files.sort()
+            if SOURCE == "PH":
+                video = list(glob.glob(video_dir))
+                video.sort()
+            else:
+                video = video_dir
 
-            feats = pose_estimator.estimate_video_pose(image_files)
+            feats = pose_estimator.estimate_video_pose(video)
 
             if not os.path.exists(feat_dir):
                 os.makedirs(feat_dir)
@@ -50,14 +51,14 @@ def generate_openpose_features_split(pose_estimator, split):
 
 
 def generate_openpose_features():
-    pose_estimator = PoseEstimator()
+    if FRAME_FEAT_MODEL not in ["pose"]:
+        print("Incorrect feature extraction model:", FRAME_FEAT_MODEL)
+        exit(0)
 
+    pose_estimator = PoseEstimator()
     generate_openpose_features_split(pose_estimator, "train")
     generate_openpose_features_split(pose_estimator, "dev")
     generate_openpose_features_split(pose_estimator, "test")
-
-
-
 
 
 if __name__ == "__main__":

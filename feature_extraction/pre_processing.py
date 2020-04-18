@@ -7,6 +7,8 @@ sys.path.append(os.sep.join(["..", "*"]))
 from config import *
 
 
+# TODO change the code for new dataset adaptation
+
 def generate_numpy_videos_split(split, source, dest, side):
     print("Generating numpy video", split, "split")
     df = get_pheonix_df(split)
@@ -110,3 +112,7 @@ def generate_numpy_videos(source, dest, side):
     generate_numpy_videos_split("test", source, dest, side)
     generate_numpy_image_mean(dest, side)
     generate_numpy_image_std(dest, side)
+
+
+if __name__ == "__main__":
+    generate_numpy_videos(source=HANDS_DIR, dest=HANDS_NP_IMGS_DIR, side=HAND_SIZE)
