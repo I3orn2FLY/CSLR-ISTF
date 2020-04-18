@@ -32,7 +32,7 @@ def get_images_files(video_dir):
     return images
 
 
-def generate_cnn_features_split(model, device, preprocess, split):
+def generate_cnn_features_split(model, device, preprocess, split, batch_size):
     with torch.no_grad():
         if SOURCE == "PH":
             df = get_pheonix_df(split)
@@ -59,10 +59,17 @@ def generate_cnn_features_split(model, device, preprocess, split):
             feat_dir = os.path.split(feat_file)[0]
 
             images = get_images_files(video_dir)
+            L = len(images)
+            s = 0
+            feats = []
+            while s < L:
+                e = min(L, s + batch_size)
+                inp = torch.stack([preprocess(image) for image in images[s:e]])
+                s = e
+                inp = inp.to(device)
+                feats.append(model(inp))
 
-            inp = torch.stack([preprocess(image) for image in images])
-            inp = inp.to(device)
-            feats = model(inp).cpu().numpy()
+            feats = torch.cat(feats, dim=0).cpu().numpy()
 
             if not os.path.exists(feat_dir):
                 os.makedirs(feat_dir)
@@ -74,7 +81,7 @@ def generate_cnn_features_split(model, device, preprocess, split):
         print()
 
 
-def generate_cnn_features():
+def generate_cnn_features(batch_size=512):
     if FRAME_FEAT_MODEL in ["pose"]:
         print("Incorrect feature extraction model:", FRAME_FEAT_MODEL)
         exit(0)
@@ -89,10 +96,10 @@ def generate_cnn_features():
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
-
-    generate_cnn_features_split(model, device, preprocess, "train")
-    generate_cnn_features_split(model, device, preprocess, "test")
-    generate_cnn_features_split(model, device, preprocess, "dev")
+    with torch.no_grad():
+        generate_cnn_features_split(model, device, preprocess, "train", batch_size)
+        generate_cnn_features_split(model, device, preprocess, "test", batch_size)
+        generate_cnn_features_split(model, device, preprocess, "dev", batch_size)
 
 
 # def generate_gloss_dataset(with_blank=True):
