@@ -4,10 +4,12 @@ import numpy as np
 import cv2
 from PIL import Image
 from torchvision import transforms
-from models import FrameFeatModel
-from utils import *
+import os
 
-sys.path.append(os.sep.join(["..", "*"]))
+sys.path.append(".." + os.sep)
+
+from utils import *
+from models import FrameFeatModel
 from config import *
 
 
@@ -76,7 +78,12 @@ def generate_cnn_features_split(model, device, preprocess, split, batch_size):
 
             np.save(feat_file, feats)
 
-            pp.show(idx)
+            if SHOW_PROGRESS:
+                pp.show(idx)
+            else:
+                if idx % 500 == 0:
+                    pp.show(idx)
+                    print()
 
         print()
 

@@ -1,10 +1,11 @@
 import torch
 import sys
 import numpy as np
-from utils import *
 from pose import PoseEstimator
+import os
 
-sys.path.append(os.sep.join(["..", "*"]))
+sys.path.append(".." + os.sep)
+from utils import *
 from config import *
 
 

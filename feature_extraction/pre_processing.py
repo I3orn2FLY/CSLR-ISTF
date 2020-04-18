@@ -1,9 +1,10 @@
 import sys
 import numpy as np
 import cv2
-from utils import *
+import os
 
-sys.path.append(os.sep.join(["..", "*"]))
+sys.path.append(".." + os.sep)
+from utils import *
 from config import *
 
 
