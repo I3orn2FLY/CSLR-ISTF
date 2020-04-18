@@ -6,6 +6,8 @@ from utils import *
 from config import *
 
 
+# TODO merge END2END datasets
+
 class PhoenixEnd2EndDataset():
     def __init__(self, mode, vocab, split, max_batch_size, augment_frame=True, augment_temp=True):
         if split == "train":
@@ -23,8 +25,8 @@ class PhoenixEnd2EndDataset():
         self._build_dataset(split, vocab)
 
     def _build_dataset(self, split, vocab):
-        self.mean = np.load(os.path.join(VARS_DIR, os.path.split(PH_HANDS_NP_IMGS_DIR)[1] + "_mean.npy"))
-        self.std = np.load(os.path.join(VARS_DIR, os.path.split(PH_HANDS_NP_IMGS_DIR)[1] + "_std.npy"))
+        self.mean = np.load(os.path.join(VARS_DIR, os.path.split(HANDS_NP_IMGS_DIR)[1] + "_mean.npy"))
+        self.std = np.load(os.path.join(VARS_DIR, os.path.split(HANDS_NP_IMGS_DIR)[1] + "_std.npy"))
 
         prefix_dir = os.sep.join([VARS_DIR, "Phoenix_End2EndDataset", self.mode])
 
@@ -36,7 +38,7 @@ class PhoenixEnd2EndDataset():
         X_lens_path = os.sep.join([prefix_dir, "X_lens_" + split + ".pkl"])
 
         if self.mode == "Hand":
-            feat_dir = os.sep.join([PH_HANDS_NP_IMGS_DIR, split])
+            feat_dir = os.sep.join([HANDS_NP_IMGS_DIR, split])
         else:
             feat_dir = os.sep.join([VIDEO_FEAT_DIR, split])
 
@@ -272,7 +274,7 @@ class KRSLEnd2EndDataset():
         X_lens_path = os.sep.join([prefix_dir, "X_lens_" + split + ".pkl"])
 
         if self.mode == "Hand":
-            feat_dir = KRSL_HANDS_NP_IMGS_DIR
+            feat_dir = HANDS_NP_IMGS_DIR
         else:
             feat_dir = VIDEO_FEAT_DIR
 

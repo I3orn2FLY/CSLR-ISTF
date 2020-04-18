@@ -16,7 +16,7 @@ class Vocab(object):
             self._build_from_KSRL()
 
     def _build_from_PH(self):
-        with open(os.sep.join([PH_ANNO_DIR, "automatic", "trainingClasses.txt"]), 'r') as f:
+        with open(os.sep.join([ANNO_DIR, "automatic", "trainingClasses.txt"]), 'r') as f:
             lines = f.readlines()
 
         glosses = []
@@ -35,7 +35,7 @@ class Vocab(object):
         print("Vocabulary of length:", len(self.idx2gloss), "(blank included)")
 
     def _build_from_KSRL(self):
-        with open(os.sep.join([KRSL_ANNO_DIR, "vocabulary.txt"]), 'r') as f:
+        with open(os.sep.join([ANNO_DIR, "vocabulary.txt"]), 'r') as f:
             lines = f.readlines()
 
         glosses = []
@@ -106,16 +106,16 @@ class ProgressPrinter():
         print("\rProgress: 100%")
 
 def get_pheonix_df(split):
-    path = os.sep.join([PH_ANNO_DIR, "manual", split + ".corpus.csv"])
+    path = os.sep.join([ANNO_DIR, "manual", split + ".corpus.csv"])
     return pd.read_csv(path, sep='|')
 
 
 def get_KRSL_df(split):
-    path = os.sep.join([KRSL_ANNO_DIR, split + ".csv"])
+    path = os.sep.join([ANNO_DIR, split + ".csv"])
     df = pd.read_csv(path)
     return df
 
-def create_annotation():
+def gen_KRSL_annotation():
     def get_PSR(video_file):
         video_file = os.path.split(video_file)[1]
         P, S, R = video_file.split("_")[:3]
@@ -126,10 +126,10 @@ def create_annotation():
         return P, S, R
 
     def get_anno_and_avoid_list():
-        df = pd.read_csv(os.path.join(KRSL_ANNO_DIR, "annotation.csv"), header=None)
+        df = pd.read_csv(os.path.join(ANNO_DIR, "annotation.csv"), header=None)
         avoid_list = []
         vocab = set()
-        with open(os.path.join(KRSL_ANNO_DIR, "176_phrases"), 'r') as f:
+        with open(os.path.join(ANNO_DIR, "176_phrases"), 'r') as f:
             anno = {}
             for line in f.readlines():
                 sent = line.strip().replace(',', '').lower().split()
@@ -146,13 +146,13 @@ def create_annotation():
                         vocab.add(word)
                 anno[int(sent[0])] = (gloss, trans)
 
-        with open(os.path.join(KRSL_ANNO_DIR, "vocabulary.txt"), 'w') as f:
+        with open(os.path.join(ANNO_DIR, "vocabulary.txt"), 'w') as f:
             for word in sorted(list(vocab)):
                 f.write(word + os.linesep)
 
         return anno, avoid_list
 
-    def create_anno_split(split_data, split_name, anno):
+    def gen_anno_split(split_data, split_name, anno):
         P_ids = []
         S_ids = []
         videos = split_data
@@ -167,12 +167,12 @@ def create_annotation():
             trans.append(anno[S][1])
 
         df = pd.DataFrame({"P_id": P_ids, "S_id": S_ids, "video": videos, "annotation": glosses, "translation": trans})
-        df.to_csv(os.path.join(KRSL_ANNO_DIR, split_name + ".csv"), index=None)
+        df.to_csv(os.path.join(ANNO_DIR, split_name + ".csv"), index=None)
         print(split_name, df.shape[0])
 
     anno, avoid_list = get_anno_and_avoid_list()
 
-    video_files = os.sep.join([KRSL_VIDEOS_DIR, "**", "*.*"])
+    video_files = os.sep.join([VIDEOS_DIR, "**", "*.*"])
 
     video_files = list(glob.glob(video_files))
     video_files.sort()
@@ -180,7 +180,7 @@ def create_annotation():
 
     video_n = 0
     for idx, video_file in enumerate(video_files):
-        video_path = video_file.replace(KRSL_VIDEOS_DIR + os.sep, "")
+        video_path = video_file.replace(VIDEOS_DIR + os.sep, "")
 
         P, S, R = get_PSR(video_file)
 
@@ -255,14 +255,14 @@ def create_annotation():
 
     random.shuffle(data_train)
 
-    create_anno_split(data_train, "train", anno)
-    create_anno_split(data_val, "val", anno)
-    create_anno_split(data_test, "test", anno)
+    gen_anno_split(data_train, "train", anno)
+    gen_anno_split(data_val, "val", anno)
+    gen_anno_split(data_test, "test", anno)
 
 
 if __name__ == "__main__":
     random.seed(0)
-    create_annotation()
+    gen_KRSL_annotation()
     vocab = Vocab()
 
     # print(vocab.idx2gloss)
