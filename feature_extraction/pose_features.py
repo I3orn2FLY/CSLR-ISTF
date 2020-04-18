@@ -11,10 +11,7 @@ from config import *
 
 def generate_openpose_features_split(pose_estimator, split):
     with torch.no_grad():
-        if SOURCE == "PH":
-            df = get_pheonix_df(split)
-        else:
-            df = get_KRSL_df(split)
+        df = get_split_df(split)
         print(SOURCE, "Feature extraction:", FRAME_FEAT_MODEL, split, "split")
         L = df.shape[0]
 

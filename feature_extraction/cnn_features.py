@@ -36,10 +36,8 @@ def get_images_files(video_dir):
 
 def generate_cnn_features_split(model, device, preprocess, split, batch_size):
     with torch.no_grad():
-        if SOURCE == "PH":
-            df = get_pheonix_df(split)
-        else:
-            df = get_KRSL_df(split)
+
+        df = get_split_df(split)
 
         print(SOURCE, "Feature extraction:", split, "split")
         L = df.shape[0]

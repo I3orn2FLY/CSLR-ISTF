@@ -105,15 +105,16 @@ class ProgressPrinter():
     def end(self):
         print("\rProgress: 100%")
 
-def get_pheonix_df(split):
-    path = os.sep.join([ANNO_DIR, "manual", split + ".corpus.csv"])
-    return pd.read_csv(path, sep='|')
 
-
-def get_KRSL_df(split):
-    path = os.sep.join([ANNO_DIR, split + ".csv"])
-    df = pd.read_csv(path)
+def get_split_df(split):
+    if SOURCE == "PH":
+        path = os.sep.join([ANNO_DIR, "manual", split + ".corpus.csv"])
+        df = pd.read_csv(path, sep='|')
+    else:
+        path = os.sep.join([ANNO_DIR, split + ".csv"])
+        df = pd.read_csv(path)
     return df
+
 
 def gen_KRSL_annotation():
     def get_PSR(video_file):

@@ -12,7 +12,7 @@ from config import *
 
 def generate_numpy_videos_split(split, source, dest, side):
     print("Generating numpy video", split, "split")
-    df = get_pheonix_df(split)
+    df = get_split_df(split)
     pp = ProgressPrinter(df.shape[0], 2)
     for idx in range(df.shape[0]):
         row = df.iloc[idx]
@@ -49,7 +49,7 @@ def generate_numpy_image_mean(dest, side):
 
     n = 0
     mean_img = np.zeros((3, side, side))
-    df = get_pheonix_df(split)
+    df = get_split_df(split)
     pp = ProgressPrinter(df.shape[0], 25)
     for idx in range(df.shape[0]):
         row = df.iloc[idx]
@@ -82,7 +82,7 @@ def generate_numpy_image_std(dest, side):
     mean_img = np.load(mean_img_path)
     n = 0
     std_img = np.zeros((3, side, side))
-    df = get_pheonix_df(split)
+    df = get_split_df(split)
     pp = ProgressPrinter(df.shape[0], 25)
     for idx in range(df.shape[0]):
         row = df.iloc[idx]

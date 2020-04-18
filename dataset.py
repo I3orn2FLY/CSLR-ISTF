@@ -55,7 +55,7 @@ class PhoenixEnd2EndDataset():
             self.length = len(self.X)
 
         else:
-            df = get_pheonix_df(split)
+            df = get_split_df(split)
             self.length = df.shape[0]
             self.X = []
             self.Y = []
@@ -288,7 +288,7 @@ class KRSLEnd2EndDataset():
             with open(X_lens_path, 'rb') as f:
                 self.X_lens = pickle.load(f)
         else:
-            df = get_KRSL_df(split)
+            df = get_split_df(split)
 
             self.X = []
             self.Y = []
