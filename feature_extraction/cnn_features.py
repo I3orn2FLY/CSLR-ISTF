@@ -36,6 +36,8 @@ def get_images_files(video_dir):
 
 def generate_cnn_features_split(model, device, preprocess, split, batch_size):
     with torch.no_grad():
+        if SOURCE == "KRSL" and split == "dev":
+            split = "val"
 
         df = get_split_df(split)
 
