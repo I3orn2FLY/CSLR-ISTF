@@ -59,6 +59,8 @@ def generate_cnn_features_split(model, device, preprocess, split, batch_size):
             feat_dir = os.path.split(feat_file)[0]
 
             images = get_images_files(video_dir)
+            if not images:
+                continue
             L = len(images)
             s = 0
             feats = []
