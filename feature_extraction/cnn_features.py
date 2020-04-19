@@ -41,7 +41,7 @@ def generate_cnn_features_split(model, device, preprocess, split, batch_size):
 
         df = get_split_df(split)
 
-        print(SOURCE, "Feature extraction:", split, "split")
+        print(SOURCE, FRAME_FEAT_MODEL, "feature extraction:", split, "split")
         L = df.shape[0]
 
         pp = ProgressPrinter(L, 10)
