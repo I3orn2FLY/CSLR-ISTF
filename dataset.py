@@ -297,6 +297,8 @@ class KRSLEnd2EndDataset():
                 row = df.iloc[idx]
                 glosses = vocab.encode(row.annotation)
                 np_feat_file = os.path.join(feat_dir, row.video).replace(".mp4", ".npy")
+                if not os.path.exists(np_feat_file):
+                    continue
                 feat = np.load(np_feat_file)
                 if len(feat) < len(glosses) * 4:
                     continue
