@@ -9,13 +9,34 @@ from config import *
 # TODO END2END Hand testing and fixing
 
 
-def filter_video_pose(video_pose):
+def process_video_pose(video_pose, augment_frame=True, fr_offset=0.1, fr_noise_body=0.005, fr_noise_face_hand=0.001):
     video_pose = video_pose.reshape(-1, 137, 3)
+    idxs = []
+    video_pose = video_pose[:, :, :2]
 
-    if POSE_ONLY_BODY:
-        video_pose = video_pose[:, 70: 95]
-        idxs = list(range(8)) + list(range(15, 19))
-        video_pose = video_pose[:, idxs, :2]
+    noise = []
+    if POSE_FACE:
+        idxs += list(range(70))
+        noise.append(fr_noise_face_hand - 2 * fr_noise_face_hand * random.rand(len(video_pose), 70, 2))
+
+    if POSE_BODY:
+        idxs += list(range(70, 70 + 8)) + list(range(70 + 15, 70 + 19))
+        noise.append(fr_noise_body - 2 * fr_noise_body * random.rand(len(video_pose), 12, 2))
+
+    if POSE_HANDS:
+        idxs += list(range(95, 137))
+
+        noise.append(fr_noise_face_hand - 2 * fr_noise_face_hand * random.rand(len(video_pose), 42, 2))
+
+    video_pose = video_pose[:, idxs]
+
+    if augment_frame:
+        noise = np.concatenate(noise, axis=1)
+
+        offset = fr_offset - 2 * fr_offset * random.rand(2)
+
+    if augment_frame:
+        video_pose += noise + offset
 
     return video_pose.reshape(len(video_pose), -1)
 
@@ -40,9 +61,6 @@ class End2EndDataset():
             self.augment_frame = augment_frame
         else:
             self.augment_temp = False
-            self.augment_frame = False
-
-        if END2END_TRAIN_MODE == "FULL":
             self.augment_frame = False
 
         self.max_batch_size = max_batch_size
@@ -151,7 +169,7 @@ class End2EndDataset():
             video_feat = np.load(self.X[i])
 
             if FRAME_FEAT_MODEL.startswith("pose"):
-                video_feat = filter_video_pose(video_feat)
+                video_feat = process_video_pose(video_feat, augment_frame=self.augment_frame)
 
             video_feat = self._augment_video(video_feat, self.X_aug_lens[i], self.X_skipped_idxs[i])
 
@@ -270,7 +288,7 @@ class End2EndDataset():
             video = self._down_sample(video, n + len(skipped_idxs))
             video = self._random_skip(video, skipped_idxs)
 
-        if self.augment_frame:
+        if self.augment_frame and not END2END_TRAIN_MODE == "FULL":
             video = self._crop_video(video)
             video = self._noise_video(video)
 

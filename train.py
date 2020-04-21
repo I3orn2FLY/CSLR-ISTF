@@ -126,7 +126,7 @@ def train(model, loaded, vocab, datasets):
                         for sentence in out_sentences:
                             hypes += sentence
 
-                        if i == 0:
+                        if i == 0 and SHOW_EXAMPLE:
                             pred = " ".join(vocab.decode(out_sentences[0]))
                             gt = Y_batch[0][:Y_lens[0]].tolist()
                             gt = " ".join(vocab.decode(gt))
@@ -153,7 +153,7 @@ def train(model, loaded, vocab, datasets):
             print()
     except KeyboardInterrupt:
         pass
-    print("Training complete:", "Best WER:", best_wer)
+    print("\nTraining complete:", "Best WER:", best_wer)
 
 
 if __name__ == "__main__":
