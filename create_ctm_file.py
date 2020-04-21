@@ -31,7 +31,7 @@ def decode_prediction(pred, vocab):
 
 
 def create_ctm_file_split(split):
-    vocab = Vocab(source="pheonix")
+    vocab = Vocab()
     model, loaded, model_path = get_model(END2END_TRAIN_MODE, vocab, END2END_TRAIN_LOAD)
     model.eval()
 
@@ -55,7 +55,7 @@ def create_ctm_file_split(split):
                 feat_path = os.sep.join([prefix, split, dir, "1.npy"])
                 feats = np.load(feat_path)
                 inp = torch.Tensor(feats).to(DEVICE).unsqueeze(0)
-                if END2END_TRAIN_MODE == "Full":
+                if END2END_TRAIN_MODE == "FULL":
                     inp = inp.unsqueeze(1)
 
                 pred = model(inp).log_softmax(dim=2)
