@@ -56,7 +56,11 @@ def get_end2end_model(vocab, load=True):
         print("Model Loaded")
     else:
         loaded = False
-        model.apply(weights_init)
+        if temp_fusion_type == 1:
+            model.temp_fusion.simple_temp_fusion.apply(weights_init)
+            model.seq_model.apply(weights_init)
+        else:
+            model.apply(weights_init)
 
     return model, loaded
 

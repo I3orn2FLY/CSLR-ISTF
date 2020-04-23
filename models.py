@@ -14,12 +14,17 @@ class Identity(nn.Module):
 class FrameFeatModel(nn.Module):
     def __init__(self):
         super(FrameFeatModel, self).__init__()
-        if FRAME_FEAT_MODEL == "densenet121":
+        if FRAME_FEAT_MODEL.startswith("densenet121"):
             self.ffm = models.densenet121(pretrained=True)
             self.ffm.classifier = Identity()
-        elif FRAME_FEAT_MODEL == "googlenet":
+        elif FRAME_FEAT_MODEL.startswith("googlenet"):
             self.ffm = models.googlenet(pretrained=True)
             self.ffm.fc = Identity()
+        elif FRAME_FEAT_MODEL.startswith("resnet18"):
+            self.ffm = models.resnet18(pretrained=True)
+            self.ffm.fc = nn.Identity()
+        elif FRAME_FEAT_MODEL.startswith("vgg-s"):
+            self.ffm = VGG_S
 
     def forward(self, x):
         return self.ffm(x)
@@ -93,18 +98,23 @@ class TempFusion(nn.Module):
         return x
 
 
-class TempFusion_VGG_S(nn.Module):
-    def __init__(self):
-        super(TempFusion_VGG_S, self).__init__()
+class TempFusion_FE(nn.Module):
+    def __init__(self,):
+        super(TempFusion_FE, self).__init__()
 
-        self.vgg_s = VGG_S()
+        self.fe = FrameFeatModel()
+        if not END2END_TRAIN_FE:
+            self.fe.eval()
+            for param in self.fe.parameters():
+                param.requires_grad = False
+
         self.simple_temp_fusion = TempFusion()
 
     def forward(self, x):
         # (batch_size, max_seq_length, 3, 101, 101)
         batch_feats = []
         for video_idx in range(x.shape[0]):
-            video_feat = self.vgg_s(x[video_idx])
+            video_feat = self.fe(x[video_idx])
             batch_feats.append(video_feat)
         batch_feats = torch.stack(batch_feats)
 
@@ -156,7 +166,7 @@ class SLR(nn.Module):
         if temp_fusion_type == 0:
             self.temp_fusion = TempFusion()
         else:
-            self.temp_fusion = TempFusion_VGG_S()
+            self.temp_fusion = TempFusion_FE()
 
         self.seq_model = BiLSTM(rnn_hidden, vocab_size)
 
