@@ -99,7 +99,7 @@ class TempFusion(nn.Module):
 
 
 class TempFusion_FE(nn.Module):
-    def __init__(self,):
+    def __init__(self, ):
         super(TempFusion_FE, self).__init__()
 
         self.fe = FrameFeatModel()
@@ -165,8 +165,12 @@ class SLR(nn.Module):
         self.vgg_s = None
         if temp_fusion_type == 0:
             self.temp_fusion = TempFusion()
-        else:
+        elif temp_fusion_type == 1:
             self.temp_fusion = TempFusion_FE()
+        elif temp_fusion_type == 2:
+            self.temp_fusion = TempFusion3D()
+        else:
+            self.temp_fusion = Identity()
 
         self.seq_model = BiLSTM(rnn_hidden, vocab_size)
 
@@ -179,6 +183,22 @@ class SLR(nn.Module):
         return x
 
 
+class TempFusion3D(nn.Module):
+    def __init__(self):
+        super(TempFusion3D, self).__init__()
+        self.cnn_3d = models.video.r2plus1d_18(pretrained=True)
+        self.avgpool = nn.AvgPool3d(kernel_size=(1, 7, 7))
+
+    def forward(self, x):
+        x = self.cnn_3d.stem(x)
+        x = self.cnn_3d.layer1(x)
+        x = self.cnn_3d.layer2(x)
+        x = self.cnn_3d.layer3(x)
+        x = self.avgpool(x)
+        x = x.permute(0, 2, 1, 3, 4)
+        return x.reshape(-1, x.size(1), 1024)
+
+
 def weights_init(m):
     classname = m.__class__.__name__
     if type(m) in [nn.Linear, nn.Conv2d, nn.Conv1d]:
@@ -187,3 +207,16 @@ def weights_init(m):
     elif classname.find('BatchNorm') != -1:
         m.weight.data.normal_(1.0, 0.02)
         m.bias.data.fill_(0)
+
+
+if __name__ == "__main__":
+    temp_fusion = TempFusion3D().to(DEVICE)
+
+    # temp_fusion = models.video.r3d_18(pretrained=True)
+
+    # temp_fusion.fc = nn.Identity()
+    # # temp_fusion.avgpool = nn.Identity()
+    # temp_fusion.to(DEVICE)
+    x = torch.rand((4, 3, 50, 112, 112)).to(DEVICE)
+    x = temp_fusion(x)
+    print(x.shape)

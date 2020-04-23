@@ -44,23 +44,13 @@ def save_model(model, best_wer):
 
 
 def get_end2end_model(vocab, load=True):
-    if END2END_TRAIN_MODE == "FULL":
-        temp_fusion_type = 0
-    elif END2END_TRAIN_MODE == "HAND":
-        temp_fusion_type = 1
-
-    model = SLR(rnn_hidden=512, vocab_size=vocab.size, temp_fusion_type=temp_fusion_type).to(DEVICE)
+    model = SLR(rnn_hidden=512, vocab_size=vocab.size, temp_fusion_type=TEMP_FUSION_TYPE).to(DEVICE)
     if load and os.path.exists(END2END_MODEL_PATH):
         loaded = True
         model.load_state_dict(torch.load(END2END_MODEL_PATH, map_location=DEVICE))
         print("Model Loaded")
     else:
         loaded = False
-        if temp_fusion_type == 1:
-            model.temp_fusion.simple_temp_fusion.apply(weights_init)
-            model.seq_model.apply(weights_init)
-        else:
-            model.apply(weights_init)
 
     return model, loaded
 
@@ -103,12 +93,6 @@ def train(model, loaded, vocab, datasets):
                         optimizer.zero_grad()
                         X_batch, Y_batch, Y_lens = dataset.get_batch(i)
                         X_batch = X_batch.to(DEVICE)
-                        L = X_batch.size()[-2]
-                        if L < 4 * Y_lens.max().item():
-                            batch = dataset.batches[i]
-                            paths = [dataset.X[k] for k in batch]
-                            print(paths)
-                            continue
 
                         preds = model(X_batch).log_softmax(dim=2)
                         T, N, V = preds.shape

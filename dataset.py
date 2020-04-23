@@ -71,14 +71,19 @@ class End2EndDataset():
         if SOURCE == "KRSL" and split == "dev":
             split = "val"
 
+        self.tensor_input = FRAME_FEAT_MODEL.startswith("resnet{2+1}d")
         self._build_dataset(split, vocab)
 
     def _build_dataset(self, split, vocab):
 
         # self.mean = np.load(os.path.join(VARS_DIR, os.path.split(PH_HANDS_NP_IMGS_DIR)[1] + "_mean.npy"))
         # self.std = np.load(os.path.join(VARS_DIR, os.path.split(PH_HANDS_NP_IMGS_DIR)[1] + "_std.npy"))
+        ffm = FRAME_FEAT_MODEL
 
-        prefix_dir = os.sep.join([VARS_DIR, "End2EndDataset", SOURCE, END2END_TRAIN_MODE, FRAME_FEAT_MODEL])
+        if self.tensor_input and TEMP_FUSION_TYPE == 4:
+            ffm = "video_tensors"
+
+        prefix_dir = os.sep.join([VARS_DIR, "End2EndDataset", SOURCE, END2END_TRAIN_MODE, ffm])
 
         X_path = os.sep.join([prefix_dir, "X_" + split + ".pkl"])
         Y_path = os.sep.join([prefix_dir, "Y_" + split + ".pkl"])
@@ -106,16 +111,32 @@ class End2EndDataset():
                 elif SOURCE == "KRSL":
                     feat_path = os.path.join(VIDEO_FEAT_DIR, row.video).replace(".mp4", ".npy")
 
+                if self.tensor_input:
+                    feat_path = feat_path.replace(".npy", ".pt")
+
                 if not os.path.exists(feat_path):
                     continue
 
-                feat = np.load(feat_path)
-                if len(feat) < len(glosses) * 4:
-                    continue
+                if self.tensor_input:
+                    feat = torch.load(feat_path)
+                    if TEMP_FUSION_TYPE == 3:
+                        x_len = feat.size(1)
+                    else:
+                        x_len = feat.size(0)
+                else:
+                    feat = np.load(feat_path)
+                    x_len = len(feat)
+
+                if TEMP_FUSION_TYPE != 3:
+                    if x_len < len(glosses) * 4:
+                        continue
+                else:
+                    if x_len < len(glosses):
+                        continue
 
                 self.X.append(feat_path)
                 self.Y.append(glosses)
-                self.X_lens.append(len(feat))
+                self.X_lens.append(x_len)
 
             if not os.path.exists(prefix_dir):
                 os.makedirs(prefix_dir)
@@ -166,24 +187,29 @@ class End2EndDataset():
         X_batch = []
         Y_lens = []
         for i in batch_idxs:
-            video_feat = np.load(self.X[i])
+            if self.tensor_input:
+                video_feat = torch.load(self.X[i])
+            else:
+                video_feat = np.load(self.X[i])
 
             if FRAME_FEAT_MODEL.startswith("pose"):
                 video_feat = process_video_pose(video_feat, augment_frame=self.augment_frame)
 
-            video_feat = self._augment_video(video_feat, self.X_aug_lens[i], self.X_skipped_idxs[i])
-
-            # for image in video:
-            #     img = image.transpose([1, 2, 0])
-            #     cv2.imshow("WINDOW", img)
-            #     cv2.waitKey(0)
+            if not self.tensor_input:
+                video_feat = self._augment_video(video_feat, self.X_aug_lens[i], self.X_skipped_idxs[i])
 
             X_batch.append(video_feat)
             Y_lens.append(len(self.Y[i]))
 
-        X_batch = torch.Tensor(np.stack(X_batch))
+        if self.tensor_input:
+            if TEMP_FUSION_TYPE == 3:
+                X_batch = torch.cat(X_batch, dim=0)
+            else:
+                X_batch = torch.stack(X_batch, dim=0)
+        else:
+            X_batch = torch.Tensor(np.stack(X_batch))
 
-        if END2END_TRAIN_MODE == "FULL":
+        if END2END_TRAIN_MODE == "FULL" and not self.tensor_input:
             X_batch = X_batch.unsqueeze(1)
 
         max_target_length = max(Y_lens)

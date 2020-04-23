@@ -9,7 +9,7 @@ import os
 sys.path.append(".." + os.sep)
 
 from utils import *
-from models import FrameFeatModel
+from models import FrameFeatModel, TempFusion3D
 from config import *
 
 
@@ -32,6 +32,40 @@ def get_images_files(video_dir):
         cap.release()
 
     return images
+
+
+def get_images(video_dir):
+    if SOURCE == "PH":
+        image_files = list(glob.glob(video_dir))
+        image_files.sort()
+        images = [cv2.cvtColor(cv2.imread(img_file), cv2.COLOR_BGR2RGB) for img_file in image_files]
+    else:
+        images = []
+        cap = cv2.VideoCapture(video_dir)
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            images.append(img)
+        cap.release()
+
+    return images
+
+
+def get_tensor_video(images, preprocess):
+    video = []
+    for img in images:
+        img = cv2.resize(img, (IMG_SIZE_3D, IMG_SIZE_3D)) / 255
+        img = img.transpose([2, 0, 1])
+        img = torch.from_numpy(img.astype(np.float32))
+        img = preprocess(img)
+        video.append(img)
+
+    video_tensor = torch.stack(video, dim=0).to(DEVICE)
+    video_tensor = video_tensor.permute(1, 0, 2, 3)
+
+    return video_tensor
 
 
 def generate_cnn_features_split(model, device, preprocess, split, batch_size):
@@ -111,6 +145,78 @@ def generate_cnn_features(batch_size=FEAT_EX_BATCH_SIZE):
         generate_cnn_features_split(model, device, preprocess, "dev", batch_size)
 
 
+def generate_3dcnn_features_split(model, preprocess, split):
+    with torch.no_grad():
+        if SOURCE == "KRSL" and split == "dev":
+            split = "val"
+
+        df = get_split_df(split)
+
+        print(SOURCE, FRAME_FEAT_MODEL, "feature extraction:", split, "split")
+        L = df.shape[0]
+
+        pp = ProgressPrinter(L, 10)
+        for idx in range(L):
+            row = df.iloc[idx]
+            if SOURCE == "PH":
+                video_dir = os.sep.join([VIDEOS_DIR, split, row.folder])
+                feat_path = os.sep.join([VIDEO_FEAT_DIR, split, row.folder]).replace("/*.png", ".pt")
+                tensor_video_path = os.sep.join([TENSOR_VIDEO_DIR, split, row.folder]).replace("/*.png", ".pt")
+            else:
+                video_dir = os.path.join(VIDEOS_DIR, row.video)
+                feat_path = os.path.join(VIDEO_FEAT_DIR, row.video).replace(".mp4", ".pt")
+                tensor_video_path = os.path.join(TENSOR_VIDEO_DIR, row.video).replace("/*.png", ".pt")
+
+            if os.path.exists(feat_path):
+                pp.omit()
+                continue
+
+            feat_dir = os.path.split(feat_path)[0]
+            tensor_video_dir = os.path.split(tensor_video_path)[0]
+
+            images = get_images(video_dir)
+            if not images:
+                continue
+            tensor_video = get_tensor_video(images, preprocess)
+
+            feat = model(tensor_video.unsqueeze(0))
+
+            if not os.path.exists(tensor_video_dir):
+                os.makedirs(tensor_video_dir)
+
+            if not os.path.exists(feat_dir):
+                os.makedirs(feat_dir)
+
+            torch.save(tensor_video, tensor_video_path)
+            torch.save(feat, feat_path)
+
+            if SHOW_PROGRESS:
+                pp.show(idx)
+            else:
+                if idx % 500 == 0:
+                    pp.show(idx)
+                    print()
+
+        print()
+
+
+def generate_3dcnn_features():
+    if not FRAME_FEAT_MODEL.startswith("resnet{2+1}d"):
+        print("Incorrect feature extraction model:", FRAME_FEAT_MODEL)
+        exit(0)
+
+    model = TempFusion3D().to(DEVICE)
+    model.eval()
+
+    preprocess = transforms.Compose([
+        transforms.Normalize(mean=[0.43216, 0.394666, 0.37645], std=[0.22803, 0.22145, 0.216989]),
+    ])
+    with torch.no_grad():
+        generate_3dcnn_features_split(model, preprocess, "train")
+        generate_3dcnn_features_split(model, preprocess, "test")
+        generate_3dcnn_features_split(model, preprocess, "dev", )
+
+
 # def generate_gloss_dataset(with_blank=True):
 #     vocab = Vocab()
 #     device = DEVICE
@@ -171,6 +277,7 @@ def generate_cnn_features(batch_size=FEAT_EX_BATCH_SIZE):
 
 
 if __name__ == "__main__":
-    generate_cnn_features()
+    # generate_cnn_features()
+    generate_3dcnn_features()
 
     # generate_gloss_dataset(with_blank=False)
