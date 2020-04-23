@@ -9,7 +9,7 @@ from config import *
 # TODO END2END Hand testing and fixing
 
 
-def process_video_pose(video_pose, augment_frame=True, fr_offset=0.1, fr_noise_body=0.005, fr_noise_face_hand=0.001):
+def process_video_pose(video_pose, augment_frame=True):
     video_pose = video_pose.reshape(-1, 137, 3)
     idxs = []
     video_pose = video_pose[:, :, :2]
@@ -17,23 +17,23 @@ def process_video_pose(video_pose, augment_frame=True, fr_offset=0.1, fr_noise_b
     noise = []
     if POSE_FACE:
         idxs += list(range(70))
-        noise.append(fr_noise_face_hand - 2 * fr_noise_face_hand * random.rand(len(video_pose), 70, 2))
+        noise.append(POSE_AUG_NOISE_HANDFACE - 2 * POSE_AUG_NOISE_HANDFACE * random.rand(len(video_pose), 70, 2))
 
     if POSE_BODY:
         idxs += list(range(70, 70 + 8)) + list(range(70 + 15, 70 + 19))
-        noise.append(fr_noise_body - 2 * fr_noise_body * random.rand(len(video_pose), 12, 2))
+        noise.append(POSE_AUG_NOISE_BODY - 2 * POSE_AUG_NOISE_BODY * random.rand(len(video_pose), 12, 2))
 
     if POSE_HANDS:
         idxs += list(range(95, 137))
 
-        noise.append(fr_noise_face_hand - 2 * fr_noise_face_hand * random.rand(len(video_pose), 42, 2))
+        noise.append(POSE_AUG_NOISE_HANDFACE - 2 * POSE_AUG_NOISE_HANDFACE * random.rand(len(video_pose), 42, 2))
 
     video_pose = video_pose[:, idxs]
 
     if augment_frame:
         noise = np.concatenate(noise, axis=1)
 
-        offset = fr_offset - 2 * fr_offset * random.rand(2)
+        offset = POSE_AUG_OFFSET - 2 * POSE_AUG_OFFSET * random.rand(2)
 
     if augment_frame:
         video_pose += noise + offset
