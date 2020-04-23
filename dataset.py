@@ -188,24 +188,20 @@ class End2EndDataset():
         Y_lens = []
         for i in batch_idxs:
             if self.tensor_input:
-                video_feat = torch.load(self.X[i])
+                video_feat = torch.load(self.X[i]).squeeze(0)
             else:
                 video_feat = np.load(self.X[i])
 
             if FRAME_FEAT_MODEL.startswith("pose"):
                 video_feat = process_video_pose(video_feat, augment_frame=self.augment_frame)
 
-            if not self.tensor_input:
-                video_feat = self._augment_video(video_feat, self.X_aug_lens[i], self.X_skipped_idxs[i])
+            video_feat = self._augment_video(video_feat, self.X_aug_lens[i], self.X_skipped_idxs[i])
 
             X_batch.append(video_feat)
             Y_lens.append(len(self.Y[i]))
 
         if self.tensor_input:
-            if TEMP_FUSION_TYPE == 3:
-                X_batch = torch.cat(X_batch, dim=0)
-            else:
-                X_batch = torch.stack(X_batch, dim=0)
+            X_batch = torch.stack(X_batch, dim=0)
         else:
             X_batch = torch.Tensor(np.stack(X_batch))
 
@@ -266,14 +262,20 @@ class End2EndDataset():
         return video
 
     def _get_length_down_sample(self, L, out_seq_len):
-        diff = L - out_seq_len * 4
+        if TEMP_FUSION_TYPE == 3:
+            diff = L - out_seq_len
+        else:
+            diff = L - out_seq_len * 4
         if diff < 1:
             return L
 
         return int(L - DOWN_SAMPLE_FACTOR * random.rand() * diff)
 
     def _get_random_skip_idxs(self, L, out_seq_len):
-        diff = L - out_seq_len * 4
+        if TEMP_FUSION_TYPE == 3:
+            diff = L - out_seq_len
+        else:
+            diff = L - out_seq_len * 4
         if diff < 3:
             return []
 
@@ -291,7 +293,11 @@ class End2EndDataset():
         return skipped_idxs
 
     def _down_sample(self, video, n):
-        video = np.array([video[int(i)] for i in np.linspace(0, len(video) - 1, n)])
+        video = [video[int(i)] for i in np.linspace(0, len(video) - 1, n)]
+        if self.tensor_input:
+            video = torch.stack(video)
+        else:
+            video = np.stack(video)
         return video
 
     def _random_skip(self, video, skipped_idxs):
@@ -304,7 +310,10 @@ class End2EndDataset():
 
             res_video.append(video[i])
 
-        res_video = np.stack(res_video)
+        if self.tensor_input:
+            res_video = torch.stack(res_video)
+        else:
+            res_video = np.stack(res_video)
 
         return res_video
 
