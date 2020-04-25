@@ -460,11 +460,9 @@ class End2EndRawDataset(End2EndDataset):
 
             video_t = torch.stack(video_t).permute(1, 0, 2, 3)
 
-
-
             X_batch.append(video_t)
 
-        X_batch = torch.stack(X_batch)
+        X_batch = torch.stack(X_batch).contiguous()
 
         return X_batch
 
