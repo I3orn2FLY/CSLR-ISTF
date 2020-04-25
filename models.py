@@ -78,6 +78,48 @@ class VGG_S(nn.Module):
         return x
 
 
+class VGG_S_3D(nn.Module):
+    def __init__(self):
+        super(VGG_S_3D, self).__init__()
+        self.conv1 = nn.Conv3d(3, 96, (1, 7, 7), (1, 2, 2))
+        self.pool1 = nn.MaxPool3d(kernel_size=(1, 3, 3), stride=(1, 3, 3))
+        self.lrn1 = nn.LocalResponseNorm(1)
+
+        self.conv2 = nn.Conv3d(96, 256, (1, 5, 5), (1, 1, 1), (0, 1, 1))
+        self.pool2 = nn.MaxPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2))
+
+        self.conv3 = nn.Conv3d(256, 512, (1, 3, 3), (1, 1, 1), (0, 1, 1))
+        self.pool3 = nn.MaxPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2))
+
+        self.conv4 = nn.Conv3d(512, 512, (1, 3, 3), (1, 1, 1), (0, 1, 1))
+
+        self.conv5 = nn.Conv3d(512, 512, (1, 3, 3), (1, 1, 1), (0, 1, 1))
+        self.pool5 = nn.MaxPool3d(kernel_size=(1, 3, 3), stride=(1, 3, 3))
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = F.relu(x)
+        x = self.pool1(x)
+        x = self.lrn1(x)
+
+        x = self.conv2(x)
+        x = F.relu(x)
+        x = self.pool2(x)
+
+        x = self.conv3(x)
+        x = F.relu(x)
+        x = self.pool3(x)
+
+        x = self.conv4(x)
+        x = F.relu(x)
+
+        x = self.conv5(x)
+        x = F.relu(x)
+        x = self.pool5(x)
+
+        return x
+
+
 class TempFusion(nn.Module):
     def __init__(self):
         super(TempFusion, self).__init__()
@@ -120,6 +162,32 @@ class TempFusion_FE(nn.Module):
 
         x = batch_feats.unsqueeze(1)
         x = self.simple_temp_fusion(x)
+        return x
+
+
+class TempFusion_Hand(nn.Module):
+    def __init__(self):
+        super(TempFusion_Hand, self).__init__()
+
+        self.fe = VGG_S_3D()
+
+        self.conv1d_1 = nn.Conv3d(512, 512, kernel_size=(5, 1, 1), padding=(2, 0, 0))
+        self.pool1 = nn.MaxPool3d(kernel_size=(2, 1, 1), stride=(2, 1, 1))
+        self.conv1d_2 = nn.Conv3d(512, 512, kernel_size=(5, 1, 1), padding=(2, 0, 0))
+        self.pool2 = nn.MaxPool3d(kernel_size=(2, 1, 1), stride=(2, 1, 1))
+
+    def forward(self, x):
+        # (batch_size, 3, max_seq_length, 101, 101)
+        x = self.fe(x)
+        x = self.conv1d_1(x)
+        x = self.pool1(x)
+        x = self.conv1d_2(x)
+        x = self.pool2(x)
+
+        x = x.squeeze()
+
+        x = x.permute(0, 2, 1)
+
         return x
 
 
@@ -166,7 +234,7 @@ class SLR(nn.Module):
         if temp_fusion_type == 0:
             self.temp_fusion = TempFusion()
         elif temp_fusion_type == 1:
-            self.temp_fusion = TempFusion_FE()
+            self.temp_fusion = TempFusion_Hand()
         elif temp_fusion_type == 2:
             self.temp_fusion = TempFusion3D()
         else:
@@ -210,13 +278,13 @@ def weights_init(m):
 
 
 if __name__ == "__main__":
-    temp_fusion = TempFusion3D().to(DEVICE)
+    vgg_s = TempFusion_Hand()
+    batch_size = 8
+    T = 100
+    C = 3
+    D = 100
+    inp = torch.rand(batch_size, C, T, D, D)
 
-    # temp_fusion = models.video.r3d_18(pretrained=True)
+    out = vgg_s(inp)
 
-    # temp_fusion.fc = nn.Identity()
-    # # temp_fusion.avgpool = nn.Identity()
-    # temp_fusion.to(DEVICE)
-    x = torch.rand((4, 3, 50, 112, 112)).to(DEVICE)
-    x = temp_fusion(x)
-    print(x.shape)
+    print(out.shape)

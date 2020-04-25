@@ -350,15 +350,15 @@ class End2EndImgFeatDataset(End2EndDataset):
 
 class End2EndRawDataset(End2EndDataset):
     def __init__(self, vocab, split, max_batch_size, img_size, augment_frame=True, augment_temp=True):
-        if not FRAME_FEAT_MODEL.startswith("resnet{2+1}d") or TEMP_FUSION_TYPE != 2:
-            print("Incorrect feat model:", FRAME_FEAT_MODEL)
-            exit(0)
+        # need some constraint here
+
         super(End2EndRawDataset, self).__init__(vocab, split, max_batch_size, augment_frame, augment_temp)
         self.img_size = img_size
 
-        self.tensor_preprocess = transforms.Compose([
-            transforms.Normalize(mean=[0.43216, 0.394666, 0.37645], std=[0.22803, 0.22145, 0.216989]),
-        ])
+        if FRAME_FEAT_MODEL.startswith("resnet{2+1}d"):
+            self.tensor_preprocess = transforms.Compose([
+                transforms.Normalize(mean=[0.43216, 0.394666, 0.37645], std=[0.22803, 0.22145, 0.216989]),
+            ])
 
     def _build_dataset(self):
         print("Building", self.split, "dataset")
@@ -449,9 +449,22 @@ class End2EndRawDataset(End2EndDataset):
 
                 video = np.stack(video)
 
-            X_batch.append(video)
+            video = video.astype(np.float32) / 255
 
-        X_batch = torch.stack(X_batch).unsqueeze(1)
+            video_t = []
+
+            for img in video:
+                img_t = torch.from_numpy(img.transpose([2, 0, 1]))
+                img_t = self.tensor_preprocess(img_t)
+                video_t.append(img_t)
+
+            video_t = torch.stack(video_t).permute(1, 0, 2, 3)
+
+
+
+            X_batch.append(video_t)
+
+        X_batch = torch.stack(X_batch)
 
         return X_batch
 
