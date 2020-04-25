@@ -83,36 +83,37 @@ def generate_cnn_features_split(model, device, preprocess, split, batch_size):
             row = df.iloc[idx]
             if SOURCE == "PH":
                 video_dir = os.sep.join([VIDEOS_DIR, split, row.folder])
-                feat_file = os.sep.join([VIDEO_FEAT_DIR, split, row.folder]).replace("/*.png", ".npy")
+                feat_path = os.sep.join([VIDEO_FEAT_DIR, split, row.folder]).replace("/*.png", ".pt")
             else:
                 video_dir = os.path.join(VIDEOS_DIR, row.video)
-                feat_file = os.path.join(VIDEO_FEAT_DIR, row.video).replace(".mp4", ".npy")
+                feat_path = os.path.join(VIDEO_FEAT_DIR, row.video).replace(".mp4", ".pt")
 
-            if os.path.exists(feat_file):
+            if os.path.exists(feat_path):
                 pp.omit()
                 continue
 
-            feat_dir = os.path.split(feat_file)[0]
+            feat_dir = os.path.split(feat_path)[0]
 
             images = get_images_files(video_dir)
             if not images:
                 continue
             L = len(images)
             s = 0
-            feats = []
+            video_feat = []
             while s < L:
                 e = min(L, s + batch_size)
                 inp = torch.stack([preprocess(image) for image in images[s:e]])
                 s = e
                 inp = inp.to(device)
-                feats.append(model(inp))
+                video_feat.append(model(inp))
 
-            feats = torch.cat(feats, dim=0).cpu().numpy()
+            video_feat = torch.cat(video_feat, dim=0).cpu()
 
             if not os.path.exists(feat_dir):
                 os.makedirs(feat_dir)
 
-            np.save(feat_file, feats)
+
+            torch.save(video_feat, feat_path)
 
             if SHOW_PROGRESS:
                 pp.show(idx)
@@ -125,7 +126,7 @@ def generate_cnn_features_split(model, device, preprocess, split, batch_size):
 
 
 def generate_cnn_features(batch_size=FEAT_EX_BATCH_SIZE):
-    if FRAME_FEAT_MODEL in ["pose"]:
+    if FRAME_FEAT_MODEL.startswith("pose") or FRAME_FEAT_MODEL.startswith("resnet{2+1}d"):
         print("Incorrect feature extraction model:", FRAME_FEAT_MODEL)
         exit(0)
 
@@ -161,33 +162,26 @@ def generate_3dcnn_features_split(model, preprocess, split):
             if SOURCE == "PH":
                 video_dir = os.sep.join([VIDEOS_DIR, split, row.folder])
                 feat_path = os.sep.join([VIDEO_FEAT_DIR, split, row.folder]).replace("/*.png", ".pt")
-                tensor_video_path = os.sep.join([TENSOR_VIDEO_DIR, split, row.folder]).replace("/*.png", ".pt")
             else:
                 video_dir = os.path.join(VIDEOS_DIR, row.video)
                 feat_path = os.path.join(VIDEO_FEAT_DIR, row.video).replace(".mp4", ".pt")
-                tensor_video_path = os.path.join(TENSOR_VIDEO_DIR, row.video).replace("/*.png", ".pt")
 
             if os.path.exists(feat_path):
                 pp.omit()
                 continue
 
             feat_dir = os.path.split(feat_path)[0]
-            tensor_video_dir = os.path.split(tensor_video_path)[0]
 
             images = get_images(video_dir)
-            if not images:
+            if len(images) < 4:
                 continue
+
             tensor_video = get_tensor_video(images, preprocess)
-
-            feat = model(tensor_video.unsqueeze(0))
-
-            if not os.path.exists(tensor_video_dir):
-                os.makedirs(tensor_video_dir)
+            feat = model(tensor_video.unsqueeze(0)).squeeze(0).cpu()
 
             if not os.path.exists(feat_dir):
                 os.makedirs(feat_dir)
 
-            torch.save(tensor_video, tensor_video_path)
             torch.save(feat, feat_path)
 
             if SHOW_PROGRESS:
@@ -277,7 +271,7 @@ def generate_3dcnn_features():
 
 
 if __name__ == "__main__":
-    # generate_cnn_features()
-    generate_3dcnn_features()
+    generate_cnn_features()
+    # generate_3dcnn_features()
 
     # generate_gloss_dataset(with_blank=False)

@@ -2,12 +2,16 @@ import pickle
 import torch
 import cv2
 import numpy as np
+from feature_extraction.cnn_features import get_images
+from torchvision import transforms
 from utils import *
 from config import *
 
 
 # TODO END2END Hand testing and fixing
-
+# TODO test End2EndImgfeat
+# TODO test End2EndImgRaw
+# TODO test End2EndImgRaw
 
 def process_video_pose(video_pose, augment_frame=True):
     video_pose = video_pose.reshape(-1, 137, 3)
@@ -42,14 +46,31 @@ def process_video_pose(video_pose, augment_frame=True):
 
 
 def get_end2end_datasets(vocab, include_test=False):
-    tr_dataset = End2EndDataset(vocab, "train", max_batch_size=END2END_BATCH_SIZE,
-                                augment_temp=END2END_DATA_AUG_TEMP, augment_frame=END2END_DATA_AUG_FRAME)
+    args = {"vocab": vocab, "split": "train", "max_batch_size": END2END_BATCH_SIZE,
+            "augment_temp": END2END_DATA_AUG_TEMP, "augment_frame": END2END_DATA_AUG_FRAME}
 
-    val_dataset = End2EndDataset(vocab, "dev", max_batch_size=END2END_BATCH_SIZE)
+    if FRAME_FEAT_MODEL.startswith("pose"):
+        dataset_class = End2EndPoseDataset
+    elif FRAME_FEAT_MODEL.startswith("densenet121") or FRAME_FEAT_MODEL.startswith("googlenet"):
+        dataset_class = End2EndImgFeatDataset
+    elif FRAME_FEAT_MODEL.startswith("resnet{2+1}d"):
+        if TEMP_FUSION_TYPE == 2:
+            dataset_class = End2EndRawDataset
+            args["img_size"] = 112
+        else:
+            dataset_class = End2EndTempFusionDataset
+    elif FRAME_FEAT_MODEL.startswith("vgg-s") and END2END_TRAIN_MODE == "HAND":
+        args["img_size"] = 101
+        dataset_class = End2EndRawDataset
+
+    tr_dataset = dataset_class(**args)
+    args["split"] = "dev"
+    val_dataset = dataset_class(**args)
 
     datasets = {"Train": tr_dataset, "Val": val_dataset}
     if include_test:
-        datasets["Test"] = End2EndDataset(vocab, "test", max_batch_size=END2END_BATCH_SIZE)
+        args["split"] = "test"
+        datasets["Test"] = dataset_class(**args)
 
     return datasets
 
@@ -71,23 +92,25 @@ class End2EndDataset():
         if SOURCE == "KRSL" and split == "dev":
             split = "val"
 
-        self.tensor_input = FRAME_FEAT_MODEL.startswith("resnet{2+1}d")
-        self._build_dataset(split, vocab)
+        self.split = split
+        self.vocab = vocab
+        self._build_dataset()
 
-    def _build_dataset(self, split, vocab):
+    def _get_feat(self, row, glosses=None):
+        raise NotImplementedError
+
+    def _build_dataset(self):
+        print("Building", self.split, "dataset")
 
         # self.mean = np.load(os.path.join(VARS_DIR, os.path.split(PH_HANDS_NP_IMGS_DIR)[1] + "_mean.npy"))
         # self.std = np.load(os.path.join(VARS_DIR, os.path.split(PH_HANDS_NP_IMGS_DIR)[1] + "_std.npy"))
         ffm = FRAME_FEAT_MODEL
 
-        if self.tensor_input and TEMP_FUSION_TYPE == 4:
-            ffm = "video_tensors"
-
         prefix_dir = os.sep.join([VARS_DIR, "End2EndDataset", SOURCE, END2END_TRAIN_MODE, ffm])
 
-        X_path = os.sep.join([prefix_dir, "X_" + split + ".pkl"])
-        Y_path = os.sep.join([prefix_dir, "Y_" + split + ".pkl"])
-        X_lens_path = os.sep.join([prefix_dir, "X_lens_" + split + ".pkl"])
+        X_path = os.sep.join([prefix_dir, "X_" + self.split + ".pkl"])
+        Y_path = os.sep.join([prefix_dir, "Y_" + self.split + ".pkl"])
+        X_lens_path = os.sep.join([prefix_dir, "X_lens_" + self.split + ".pkl"])
 
         if os.path.exists(X_path) and os.path.exists(Y_path) and os.path.exists(X_lens_path):
             with open(X_path, 'rb') as f:
@@ -99,44 +122,20 @@ class End2EndDataset():
             with open(X_lens_path, 'rb') as f:
                 self.X_lens = pickle.load(f)
         else:
-            df = get_split_df(split)
+            df = get_split_df(self.split)
             self.X = []
             self.Y = []
             self.X_lens = []
             for idx in range(df.shape[0]):
                 row = df.iloc[idx]
-                glosses = vocab.encode(row.annotation)
-                if SOURCE == "PH":
-                    feat_path = os.sep.join([VIDEO_FEAT_DIR, split, row.folder]).replace("/*.png", ".npy")
-                elif SOURCE == "KRSL":
-                    feat_path = os.path.join(VIDEO_FEAT_DIR, row.video).replace(".mp4", ".npy")
-
-                if self.tensor_input:
-                    feat_path = feat_path.replace(".npy", ".pt")
-
-                if not os.path.exists(feat_path):
+                glosses = self.vocab.encode(row.annotation)
+                feat_path, feat, feat_len = self._get_feat(row, glosses)
+                if feat is None:
                     continue
-
-                if self.tensor_input:
-                    feat = torch.load(feat_path)
-                    if TEMP_FUSION_TYPE == 3:
-                        x_len = feat.size(1)
-                    else:
-                        x_len = feat.size(0)
-                else:
-                    feat = np.load(feat_path)
-                    x_len = len(feat)
-
-                if TEMP_FUSION_TYPE != 3:
-                    if x_len < len(glosses) * 4:
-                        continue
-                else:
-                    if x_len < len(glosses):
-                        continue
 
                 self.X.append(feat_path)
                 self.Y.append(glosses)
-                self.X_lens.append(x_len)
+                self.X_lens.append(feat_len)
 
             if not os.path.exists(prefix_dir):
                 os.makedirs(prefix_dir)
@@ -182,31 +181,15 @@ class End2EndDataset():
 
         return len(self.batches)
 
+    def _get_X_batch(self, batch_idxs):
+
+        raise NotImplementedError
+
     def get_batch(self, idx):
         batch_idxs = self.batches[idx]
-        X_batch = []
-        Y_lens = []
-        for i in batch_idxs:
-            if self.tensor_input:
-                video_feat = torch.load(self.X[i]).squeeze(0)
-            else:
-                video_feat = np.load(self.X[i])
+        Y_lens = [len(self.Y[i]) for i in batch_idxs]
 
-            if FRAME_FEAT_MODEL.startswith("pose"):
-                video_feat = process_video_pose(video_feat, augment_frame=self.augment_frame)
-
-            video_feat = self._augment_video(video_feat, self.X_aug_lens[i], self.X_skipped_idxs[i])
-
-            X_batch.append(video_feat)
-            Y_lens.append(len(self.Y[i]))
-
-        if self.tensor_input:
-            X_batch = torch.stack(X_batch, dim=0)
-        else:
-            X_batch = torch.Tensor(np.stack(X_batch))
-
-        if END2END_TRAIN_MODE == "FULL" and not self.tensor_input:
-            X_batch = X_batch.unsqueeze(1)
+        X_batch = self._get_X_batch(batch_idxs)
 
         max_target_length = max(Y_lens)
 
@@ -235,47 +218,18 @@ class End2EndDataset():
 
         return X_aug_lens, X_skipped_idxs
 
-    def _noise_video(self, video):
-        video = video.astype(np.float32)
-        video += 2 - 4 * random.rand(*video.shape)
-
-        video = np.maximum(video, 0)
-        video = np.minimum(video, 255)
-
-        # video = video.astype(np.uint8)
-        return video
-
-    def _crop_video(self, video):
-        for i, img in enumerate(video):
-            img = img.transpose([1, 2, 0])
-            h, w = img.shape[:2]
-            y1, x1 = int(0.2 * random.rand() * h), int(0.2 * random.rand() * h)
-            y2, x2 = h - int(0.2 * random.rand() * h), w - int(0.2 * random.rand() * h)
-
-            img = img[y1:y2, x1:x2]
-            img = cv2.resize(img, (w, h))
-
-            img = img.transpose([2, 0, 1])
-
-            video[i] = img
-
-        return video
-
     def _get_length_down_sample(self, L, out_seq_len):
-        if TEMP_FUSION_TYPE == 3:
-            diff = L - out_seq_len
-        else:
-            diff = L - out_seq_len * 4
+        diff = self._get_aug_diff(L, out_seq_len)
         if diff < 1:
             return L
 
         return int(L - DOWN_SAMPLE_FACTOR * random.rand() * diff)
 
+    def _get_aug_diff(self, L, out_seq_len):
+        return L - out_seq_len * 4
+
     def _get_random_skip_idxs(self, L, out_seq_len):
-        if TEMP_FUSION_TYPE == 3:
-            diff = L - out_seq_len
-        else:
-            diff = L - out_seq_len * 4
+        diff = self._get_aug_diff(L, out_seq_len)
         if diff < 3:
             return []
 
@@ -294,10 +248,6 @@ class End2EndDataset():
 
     def _down_sample(self, video, n):
         video = [video[int(i)] for i in np.linspace(0, len(video) - 1, n)]
-        if self.tensor_input:
-            video = torch.stack(video)
-        else:
-            video = np.stack(video)
         return video
 
     def _random_skip(self, video, skipped_idxs):
@@ -310,40 +260,281 @@ class End2EndDataset():
 
             res_video.append(video[i])
 
-        if self.tensor_input:
-            res_video = torch.stack(res_video)
-        else:
-            res_video = np.stack(res_video)
-
         return res_video
 
-    def _augment_video(self, video, n, skipped_idxs):
 
-        if self.augment_temp:
-            video = self._down_sample(video, n + len(skipped_idxs))
-            video = self._random_skip(video, skipped_idxs)
+class End2EndPoseDataset(End2EndDataset):
+    def __init__(self, vocab, split, max_batch_size, augment_frame=True, augment_temp=True):
+        if not FRAME_FEAT_MODEL.startswith("pose"):
+            print("Incorrect feat model:", FRAME_FEAT_MODEL)
+            exit(0)
+        super(End2EndPoseDataset, self).__init__(vocab, split, max_batch_size, augment_frame, augment_temp)
 
-        if self.augment_frame and not END2END_TRAIN_MODE == "FULL":
-            video = self._crop_video(video)
-            video = self._noise_video(video)
+    def _get_feat(self, row, glosses=None):
+        if SOURCE == "PH":
+            feat_path = os.sep.join([VIDEO_FEAT_DIR, self.split, row.folder]).replace("/*.png", ".npy")
+        elif SOURCE == "KRSL":
+            feat_path = os.path.join(VIDEO_FEAT_DIR, row.video).replace(".mp4", ".npy")
+        else:
+            return None, None, None
 
+        if not os.path.exists(feat_path):
+            return None, None, None
+
+        feat = np.load(feat_path)
+        feat_len = len(feat)
+
+        if feat_len < len(glosses) * 4:
+            return None, None, None
+
+        return feat_path, feat, feat_len
+
+    def _get_X_batch(self, batch_idxs):
+        X_batch = []
+        for i in batch_idxs:
+            video = np.load(self.X[i])
+            video = process_video_pose(video, augment_frame=self.augment_frame)
+            if self.augment_temp:
+                video = self._down_sample(video, self.X_aug_lens[i] + len(self.X_skipped_idxs[i]))
+                video = self._random_skip(video, self.X_skipped_idxs[i])
+                video = np.stack(video)
+
+            X_batch.append(video)
+
+        X_batch = torch.from_numpy(np.stack(X_batch).astype(np.float32))
+
+        return X_batch
+
+
+class End2EndImgFeatDataset(End2EndDataset):
+    def __init__(self, vocab, split, max_batch_size, augment_frame=True, augment_temp=True):
+        if not FRAME_FEAT_MODEL.startswith("densenet121") or not FRAME_FEAT_MODEL.startswith("googlenet"):
+            print("Incorrect feat model:", FRAME_FEAT_MODEL)
+            exit(0)
+        super(End2EndImgFeatDataset, self).__init__(vocab, split, max_batch_size, augment_frame, augment_temp)
+
+    def _get_feat(self, row, glosses=None):
+        if SOURCE == "PH":
+            feat_path = os.sep.join([VIDEO_FEAT_DIR, self.split, row.folder]).replace("/*.png", ".pt")
+        elif SOURCE == "KRSL":
+            feat_path = os.path.join(VIDEO_FEAT_DIR, row.video).replace(".mp4", ".pt")
+        else:
+            return None, None, None
+
+        if not os.path.exists(feat_path):
+            return None, None, None
+
+        feat = torch.load(feat_path)
+        feat_len = len(feat)
+
+        if feat_len < len(glosses) * 4:
+            return None, None, None
+
+        return feat_path, feat, feat_len
+
+    def _get_X_batch(self, batch_idxs):
+        X_batch = []
+        for i in batch_idxs:
+            video = torch.load(self.X[i])
+            if self.augment_temp:
+                video = self._down_sample(video, self.X_aug_lens[i] + len(self.X_skipped_idxs[i]))
+                video = self._random_skip(video, self.X_skipped_idxs[i])
+                video = torch.stack(video)
+
+            X_batch.append(video)
+
+        X_batch = torch.stack(X_batch).unsqueeze(1)
+
+        return X_batch
+
+
+class End2EndRawDataset(End2EndDataset):
+    def __init__(self, vocab, split, max_batch_size, img_size, augment_frame=True, augment_temp=True):
+        if not FRAME_FEAT_MODEL.startswith("resnet{2+1}d") or TEMP_FUSION_TYPE != 2:
+            print("Incorrect feat model:", FRAME_FEAT_MODEL)
+            exit(0)
+        super(End2EndRawDataset, self).__init__(vocab, split, max_batch_size, augment_frame, augment_temp)
+        self.img_size = img_size
+
+        self.tensor_preprocess = transforms.Compose([
+            transforms.Normalize(mean=[0.43216, 0.394666, 0.37645], std=[0.22803, 0.22145, 0.216989]),
+        ])
+
+    def _build_dataset(self):
+        print("Building", self.split, "dataset")
+
+        ffm = "raw_videos"
+
+        prefix_dir = os.sep.join([VARS_DIR, "End2EndDataset", SOURCE, END2END_TRAIN_MODE, ffm])
+
+        X_path = os.sep.join([prefix_dir, "X_" + self.split + ".pkl"])
+        Y_path = os.sep.join([prefix_dir, "Y_" + self.split + ".pkl"])
+        X_lens_path = os.sep.join([prefix_dir, "X_lens_" + self.split + ".pkl"])
+
+        if os.path.exists(X_path) and os.path.exists(Y_path) and os.path.exists(X_lens_path):
+            with open(X_path, 'rb') as f:
+                self.X = pickle.load(f)
+
+            with open(Y_path, 'rb') as f:
+                self.Y = pickle.load(f)
+
+            with open(X_lens_path, 'rb') as f:
+                self.X_lens = pickle.load(f)
+        else:
+            df = get_split_df(self.split)
+            self.X = []
+            self.Y = []
+            self.X_lens = []
+
+            pp = ProgressPrinter(df.shape[0], 5)
+            for idx in range(df.shape[0]):
+                row = df.iloc[idx]
+                glosses = self.vocab.encode(row.annotation)
+                feat_path, feat, feat_len = self._get_feat(row, glosses)
+                if feat is None:
+                    continue
+
+                if SHOW_PROGRESS:
+                    pp.show(idx)
+
+                self.X.append(feat_path)
+                self.Y.append(glosses)
+                self.X_lens.append(feat_len)
+
+            pp.end()
+            if not os.path.exists(prefix_dir):
+                os.makedirs(prefix_dir)
+
+            with open(X_path, 'wb') as f:
+                pickle.dump(self.X, f)
+
+            with open(Y_path, 'wb') as f:
+                pickle.dump(self.Y, f)
+
+            with open(X_lens_path, 'wb') as f:
+                pickle.dump(self.X_lens, f)
+
+        self.length = len(self.X)
+
+    def _get_feat(self, row, glosses=None):
+        if SOURCE == "PH":
+            video_dir = os.sep.join([VIDEOS_DIR, self.split, row.folder])
+        elif SOURCE == "KRSL":
+            video_dir = os.path.join(VIDEOS_DIR, row.video)
+        else:
+            return None, None, None
+
+        feat = get_images(video_dir)
+        feat_len = len(feat)
+
+        if feat_len < len(glosses) * 4:
+            return None, None, None
+
+        return video_dir, feat, feat_len
+
+    def _get_X_batch(self, batch_idxs):
+        X_batch = []
+        for i in batch_idxs:
+            video = get_images(self.X[i])
+            if self.augment_temp:
+                video = self._down_sample(video, self.X_aug_lens[i] + len(self.X_skipped_idxs[i]))
+                video = self._random_skip(video, self.X_skipped_idxs[i])
+
+            if self.augment_frame:
+                self._crop_video(video, self.img_size)
+                self._noise_video(video)
+            else:
+                for i, img in enumerate(video):
+                    video[i] = cv2.resize(img, (self.img_size, self.img_size))
+
+                video = np.stack(video)
+
+            X_batch.append(video)
+
+        X_batch = torch.stack(X_batch).unsqueeze(1)
+
+        return X_batch
+
+    def _noise_video(self, video):
+        video = video.astype(np.float32)
+        video += 2 - 4 * random.rand(*video.shape)
+
+        video = np.maximum(video, 0)
+        video = np.minimum(video, 255)
+
+        # video = video.astype(np.uint8)
         return video
+
+    def _crop_video(self, video, img_size):
+        cropped_video = []
+        for img in video:
+            img = img.transpose([1, 2, 0])
+            h, w = img.shape[:2]
+            y1, x1 = int(0.2 * random.rand() * h), int(0.2 * random.rand() * h)
+            y2, x2 = h - int(0.2 * random.rand() * h), w - int(0.2 * random.rand() * h)
+
+            img = img[y1:y2, x1:x2]
+            img = cv2.resize(img, (img_size, img_size))
+
+            img = img.transpose([2, 0, 1])
+
+            cropped_video.append(img)
+
+        return np.stack(cropped_video)
+
+
+class End2EndTempFusionDataset(End2EndDataset):
+    def __init__(self, vocab, split, max_batch_size, augment_frame=True, augment_temp=True):
+        if not FRAME_FEAT_MODEL.startswith("resnet{2+1}d") and TEMP_FUSION_TYPE != 3:
+            print("Incorrect feat model:", FRAME_FEAT_MODEL, TEMP_FUSION_TYPE)
+            exit(0)
+        super(End2EndTempFusionDataset, self).__init__(vocab, split, max_batch_size, augment_frame, augment_temp)
+
+    def _get_feat(self, row, glosses=None):
+        if SOURCE == "PH":
+            feat_path = os.sep.join([VIDEO_FEAT_DIR, self.split, row.folder]).replace("/*.png", ".pt")
+        elif SOURCE == "KRSL":
+            feat_path = os.path.join(VIDEO_FEAT_DIR, row.video).replace(".mp4", ".pt")
+        else:
+            return None, None, None
+
+        if not os.path.exists(feat_path):
+            return None, None, None
+
+        feat = torch.load(feat_path)
+        feat_len = len(feat)
+
+        if feat_len < len(glosses) or len(feat.shape) < 2:
+            return None, None, None
+
+        return feat_path, feat, feat_len
+
+    def _get_X_batch(self, batch_idxs):
+        X_batch = []
+        for i in batch_idxs:
+            video = torch.load(self.X[i])
+            if self.augment_temp:
+                video = self._down_sample(video, self.X_aug_lens[i] + len(self.X_skipped_idxs[i]))
+                video = self._random_skip(video, self.X_skipped_idxs[i])
+                video = torch.stack(video)
+
+            X_batch.append(video)
+
+        X_batch = torch.stack(X_batch)
+
+        return X_batch
+
+    def _get_aug_diff(self, L, out_seq_len):
+        return L - out_seq_len
 
 
 if __name__ == "__main__":
     vocab = Vocab()
-    train_dataset = End2EndDataset(vocab, "train", 32)
+    datasets = get_end2end_datasets(vocab)
+    train_dataset = datasets["Train"]
     train_dataset.start_epoch()
 
     X_batch, Y_batch, Y_lens = train_dataset.get_batch(0)
-
-    print(pd.Series(train_dataset.X_lens).value_counts())
-    c = 0
-    for x, y in zip(train_dataset.X_lens, train_dataset.Y):
-        if x < 4 * len(y):
-            c += 1
-
-    print(c)
 
     print(len(train_dataset.X_lens))
     print(X_batch.size())
