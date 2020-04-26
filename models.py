@@ -278,13 +278,15 @@ def weights_init(m):
 
 
 if __name__ == "__main__":
-    vgg_s = TempFusion_Hand()
+    vgg_s = TempFusion3D().to(DEVICE)
+    vgg_s.eval()
     batch_size = 8
-    T = 100
+    T = 104
     C = 3
-    D = 100
-    inp = torch.rand(batch_size, C, T, D, D)
+    D = 112
+    with torch.no_grad():
+        inp = torch.rand(batch_size, C, T, D, D).to(DEVICE)
 
-    out = vgg_s(inp)
+        out = vgg_s(inp)
 
-    print(out.shape)
+        print(out.shape)

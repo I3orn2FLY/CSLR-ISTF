@@ -9,7 +9,7 @@ import os
 sys.path.append(".." + os.sep)
 
 from utils import *
-from models import FrameFeatModel, TempFusion3D
+from models import FrameFeatModel, TempFusion3D, SLR
 from config import *
 
 
@@ -34,38 +34,60 @@ def get_images_files(video_dir):
     return images
 
 
-def get_images(video_dir):
+def get_images(video_dir, resize=False, change_color=True):
     if SOURCE == "PH":
         image_files = list(glob.glob(video_dir))
         image_files.sort()
-        images = [cv2.cvtColor(cv2.imread(img_file), cv2.COLOR_BGR2RGB) for img_file in image_files]
+        images = []
+        for img_file in image_files:
+            img = cv2.imread(img_file)
+            if change_color:
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+            if resize:
+                img = cv2.resize(img, (IMG_SIZE_3D, IMG_SIZE_3D))
+
+            images.append(img)
+
     else:
         images = []
         cap = cv2.VideoCapture(video_dir)
         while True:
-            ret, frame = cap.read()
+            ret, img = cap.read()
             if not ret:
                 break
-            img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+            if change_color:
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+            if resize:
+                img = cv2.resize(img, (IMG_SIZE_3D, IMG_SIZE_3D))
+
             images.append(img)
         cap.release()
 
     return images
 
 
-def get_tensor_video(images, preprocess):
+def get_tensor_video(images, preprocess, resize=True, change_color=False):
     video = []
     for img in images:
-        img = cv2.resize(img, (IMG_SIZE_3D, IMG_SIZE_3D)) / 255
+        if resize:
+            img = cv2.resize(img, (IMG_SIZE_3D, IMG_SIZE_3D))
+
+        if change_color:
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+        img = img / 255
         img = img.transpose([2, 0, 1])
         img = torch.from_numpy(img.astype(np.float32))
         img = preprocess(img)
         video.append(img)
 
-    video_tensor = torch.stack(video, dim=0).to(DEVICE)
+    video_tensor = torch.stack(video, dim=0)
     video_tensor = video_tensor.permute(1, 0, 2, 3)
 
-    return video_tensor
+    return video_tensor.to(DEVICE)
 
 
 def generate_cnn_features_split(model, device, preprocess, split, batch_size):
@@ -111,7 +133,6 @@ def generate_cnn_features_split(model, device, preprocess, split, batch_size):
 
             if not os.path.exists(feat_dir):
                 os.makedirs(feat_dir)
-
 
             torch.save(video_feat, feat_path)
 
@@ -211,9 +232,101 @@ def generate_3dcnn_features():
         generate_3dcnn_features_split(model, preprocess, "dev", )
 
 
+def save_glosses(images, gloss_idx, temporal_stride):
+    gloss_paths = []
+    for j in range(len(images) // temporal_stride):
+
+        gloss_path = os.path.join(GLOSS_DATA_DIR, str(gloss_idx))
+        if not os.path.exists(gloss_path):
+            os.makedirs(gloss_path)
+
+        for idx, image in enumerate(images[j * temporal_stride: (j + 1) * temporal_stride]):
+            cv2.imwrite(os.path.join(gloss_path, str(idx) + ".jpg"), image)
+
+        gloss_paths.append(os.path.join(str(gloss_idx), "*.jpg"))
+
+        gloss_idx += 1
+
+    return gloss_paths
+
+
+def down_sample_images(images, temp_stride=4):
+    L = len(images)
+    n_gloss = L // temp_stride
+    des_L = int(n_gloss * temp_stride)
+    idxs = np.linspace(0, L - 1, des_L)
+    imgs = [images[int(round(i))] for i in idxs]
+    return imgs
+
+
+def generate_gloss_dataset():
+    vocab = Vocab()
+    model = SLR(rnn_hidden=512, vocab_size=vocab.size, temp_fusion_type=2).to(DEVICE)
+    model_path = os.path.join("..", TEMP_FUSION_END2END_MODEL_PATH)
+    if os.path.exists(model_path):
+        model.load_state_dict(torch.load(model_path, map_location=DEVICE))
+        print("Model Loaded")
+    else:
+        print("Model doesnt exist")
+        exit(0)
+
+    model.eval()
+
+    temp_stride = 4
+    df = get_split_df("train")
+    Y = []
+    gloss_paths = []
+    with torch.no_grad():
+
+        pp = ProgressPrinter(df.shape[0], 5)
+        gloss_idx = 0
+
+        preprocess = transforms.Compose([
+            transforms.Normalize(mean=[0.43216, 0.394666, 0.37645], std=[0.22803, 0.22145, 0.216989]),
+        ])
+
+        for idx in range(df.shape[0]):
+
+            row = df.iloc[idx]
+
+            if SOURCE == "PH":
+                video_dir = os.sep.join([VIDEOS_DIR, "train", row.folder])
+            elif SOURCE == "KRSL":
+                video_dir = os.path.join(VIDEOS_DIR, row.video)
+
+            images = get_images(video_dir, resize=True, change_color=False)
+            if len(images) < 4:
+                continue
+
+            images = down_sample_images(images, temp_stride=temp_stride)
+            gloss_paths += save_glosses(images, gloss_idx, temp_stride)
+
+            tensor_video = get_tensor_video(images, preprocess, resize=False, change_color=True).unsqueeze(0)
+            preds = model(tensor_video).squeeze(1).log_softmax(dim=1).argmax(dim=1)
+
+            for i in range(preds.size(0)):
+                gloss = preds[i].item()
+                Y.append(gloss)
+
+            assert (len(Y) == len(gloss_paths))
+
+            if SHOW_PROGRESS:
+                pp.show(idx)
+
+            if idx > 5: break
+
+        pp.end()
+
+    Y_gloss = [vocab.idx2gloss[i] for i in Y]
+
+    df = pd.DataFrame({"folder": gloss_paths, "gloss": Y_gloss, "gloss_idx": Y})
+
+    df.to_csv(os.path.join(ANNO_DIR, "gloss_dataset.csv"), index=None)
+
 
 if __name__ == "__main__":
-    generate_cnn_features()
+    # generate_cnn_features()
+    generate_gloss_dataset()
     # generate_3dcnn_features()
 
     # generate_gloss_dataset(with_blank=False)
