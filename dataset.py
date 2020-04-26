@@ -181,7 +181,7 @@ class End2EndDataset():
 
         return len(self.batches)
 
-    def _get_X_batch(self, batch_idxs):
+    def get_X_batch(self, batch_idxs):
 
         raise NotImplementedError
 
@@ -189,7 +189,7 @@ class End2EndDataset():
         batch_idxs = self.batches[idx]
         Y_lens = [len(self.Y[i]) for i in batch_idxs]
 
-        X_batch = self._get_X_batch(batch_idxs)
+        X_batch = self.get_X_batch(batch_idxs)
 
         max_target_length = max(Y_lens)
 
@@ -289,7 +289,7 @@ class End2EndPoseDataset(End2EndDataset):
 
         return feat_path, feat, feat_len
 
-    def _get_X_batch(self, batch_idxs):
+    def get_X_batch(self, batch_idxs):
         X_batch = []
         for i in batch_idxs:
             video = np.load(self.X[i])
@@ -332,7 +332,7 @@ class End2EndImgFeatDataset(End2EndDataset):
 
         return feat_path, feat, feat_len
 
-    def _get_X_batch(self, batch_idxs):
+    def get_X_batch(self, batch_idxs):
         X_batch = []
         for i in batch_idxs:
             video = torch.load(self.X[i])
@@ -432,7 +432,7 @@ class End2EndRawDataset(End2EndDataset):
 
         return video_dir, feat, feat_len
 
-    def _get_X_batch(self, batch_idxs):
+    def get_X_batch(self, batch_idxs):
         X_batch = []
         for i in batch_idxs:
             video = get_images(self.X[i])
@@ -520,7 +520,7 @@ class End2EndTempFusionDataset(End2EndDataset):
 
         return feat_path, feat, feat_len
 
-    def _get_X_batch(self, batch_idxs):
+    def get_X_batch(self, batch_idxs):
         X_batch = []
         for i in batch_idxs:
             video = torch.load(self.X[i])
