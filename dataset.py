@@ -1,5 +1,6 @@
 import pickle
 import torch
+import multiprocessing as mp
 import cv2
 import numpy as np
 from feature_extraction.cnn_features import get_images
@@ -246,22 +247,6 @@ class End2EndDataset():
         skipped_idxs.sort()
         return skipped_idxs
 
-    def _down_sample(self, video, n):
-        video = [video[int(i)] for i in np.linspace(0, len(video) - 1, n)]
-        return video
-
-    def _random_skip(self, video, skipped_idxs):
-        res_video = []
-
-        for i in range(len(video)):
-            if skipped_idxs and i == skipped_idxs[0]:
-                skipped_idxs.pop(0)
-                continue
-
-            res_video.append(video[i])
-
-        return res_video
-
 
 class End2EndPoseDataset(End2EndDataset):
     def __init__(self, vocab, split, max_batch_size, augment_frame=True, augment_temp=True):
@@ -295,8 +280,8 @@ class End2EndPoseDataset(End2EndDataset):
             video = np.load(self.X[i])
             video = process_video_pose(video, augment_frame=self.augment_frame)
             if self.augment_temp:
-                video = self._down_sample(video, self.X_aug_lens[i] + len(self.X_skipped_idxs[i]))
-                video = self._random_skip(video, self.X_skipped_idxs[i])
+                video = down_sample(video, self.X_aug_lens[i] + len(self.X_skipped_idxs[i]))
+                video = random_skip(video, self.X_skipped_idxs[i])
                 video = np.stack(video)
 
             X_batch.append(video)
@@ -337,8 +322,8 @@ class End2EndImgFeatDataset(End2EndDataset):
         for i in batch_idxs:
             video = torch.load(self.X[i])
             if self.augment_temp:
-                video = self._down_sample(video, self.X_aug_lens[i] + len(self.X_skipped_idxs[i]))
-                video = self._random_skip(video, self.X_skipped_idxs[i])
+                video = down_sample(video, self.X_aug_lens[i] + len(self.X_skipped_idxs[i]))
+                video = random_skip(video, self.X_skipped_idxs[i])
                 video = torch.stack(video)
 
             X_batch.append(video)
@@ -348,17 +333,93 @@ class End2EndImgFeatDataset(End2EndDataset):
         return X_batch
 
 
+def down_sample(video, n):
+    video = [video[int(i)] for i in np.linspace(0, len(video) - 1, n)]
+    return video
+
+
+def random_skip(video, skipped_idxs):
+    res_video = []
+
+    for i in range(len(video)):
+        if skipped_idxs and i == skipped_idxs[0]:
+            skipped_idxs.pop(0)
+            continue
+
+        res_video.append(video[i])
+
+    return res_video
+
+
+def get_images_worker(video_dir):
+    images = []
+    if SOURCE == "PH":
+        image_files = list(glob.glob(video_dir))
+        image_files.sort()
+
+        for img_file in image_files:
+            img = cv2.imread(img_file)
+            images.append(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+    else:
+        cap = cv2.VideoCapture(video_dir)
+        while True:
+            ret, img = cap.read()
+            if not ret:
+                break
+            images.append(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+        cap.release()
+
+    return images
+
+
+def crop_video(video):
+    cropped_video = []
+    for img in video:
+        h, w = img.shape[:2]
+        y1, x1 = int(0.2 * random.rand() * h), int(0.2 * random.rand() * h)
+        y2, x2 = h - int(0.2 * random.rand() * h), w - int(0.2 * random.rand() * h)
+        img = img[y1:y2, x1:x2]
+        cropped_video.append(img)
+
+    return cropped_video
+
+
+def get_video_worker(args):
+    video_dir, img_size, mean, std, aug_frame, aug_temp, aug_len, skip_idxs = args
+
+    images = get_images_worker(video_dir)
+
+    if aug_temp:
+        images = down_sample(images, aug_len + len(skip_idxs))
+        images = random_skip(images, skip_idxs)
+
+    if aug_frame:
+        crop_video(images)
+
+    video = []
+    for img in images:
+        img = cv2.resize(img, (img_size, img_size))
+        img = img.astype(np.float32) / 255
+
+        img = (img - mean) / std
+
+        video.append(img)
+
+    video = np.stack(video)
+
+    video = video.transpose([3, 0, 1, 2])
+
+    return video
+
+
 class End2EndRawDataset(End2EndDataset):
     def __init__(self, vocab, split, max_batch_size, img_size, augment_frame=True, augment_temp=True):
         # need some constraint here
 
         super(End2EndRawDataset, self).__init__(vocab, split, max_batch_size, augment_frame, augment_temp)
         self.img_size = img_size
-
-        if FRAME_FEAT_MODEL.startswith("resnet{2+1}d"):
-            self.tensor_preprocess = transforms.Compose([
-                transforms.Normalize(mean=[0.43216, 0.394666, 0.37645], std=[0.22803, 0.22145, 0.216989]),
-            ])
+        self.mean = np.array([0.43216, 0.394666, 0.37645], dtype=np.float32)
+        self.std = np.array([0.22803, 0.22145, 0.216989], dtype=np.float32)
 
     def _build_dataset(self):
         print("Building", self.split, "dataset")
@@ -424,7 +485,7 @@ class End2EndRawDataset(End2EndDataset):
         else:
             return None, None, None
 
-        feat = get_images(video_dir)
+        feat = get_images(video_dir, change_color=False)
         feat_len = len(feat)
 
         if feat_len < len(glosses) * 4:
@@ -433,65 +494,42 @@ class End2EndRawDataset(End2EndDataset):
         return video_dir, feat, feat_len
 
     def get_X_batch(self, batch_idxs):
-        X_batch = []
-        for i in batch_idxs:
-            video = get_images(self.X[i])
-            if self.augment_temp:
-                video = self._down_sample(video, self.X_aug_lens[i] + len(self.X_skipped_idxs[i]))
-                video = self._random_skip(video, self.X_skipped_idxs[i])
+        if USE_MP:
+            pool = mp.Pool(processes=len(batch_idxs))
 
-            if self.augment_frame:
-                self._crop_video(video, self.img_size)
-                self._noise_video(video)
-            else:
-                for i, img in enumerate(video):
-                    video[i] = cv2.resize(img, (self.img_size, self.img_size))
+            arg_list = []
+            for i in batch_idxs:
+                arg_list.append((self.X[i], self.img_size, self.mean, self.std,
+                                 self.augment_frame, self.augment_temp,
+                                 self.X_aug_lens[i], self.X_skipped_idxs[i]))
 
-                video = np.stack(video)
+            X_batch = pool.map(get_video_worker, arg_list)
+            pool.close()
+            pool.join()
 
-            video = video.astype(np.float32) / 255
+        else:
+            X_batch = []
+            for i in batch_idxs:
+                arg = (self.X[i], self.img_size, self.mean, self.std,
+                       self.augment_frame, self.augment_temp,
+                       self.X_aug_lens[i], self.X_skipped_idxs[i])
 
-            video_t = []
+                X_batch.append(get_video_worker(arg))
 
-            for img in video:
-                img_t = torch.from_numpy(img.transpose([2, 0, 1]))
-                img_t = self.tensor_preprocess(img_t)
-                video_t.append(img_t)
-
-            video_t = torch.stack(video_t).permute(1, 0, 2, 3)
-
-            X_batch.append(video_t)
-
-        X_batch = torch.stack(X_batch).contiguous()
+        X_batch = torch.from_numpy(np.stack(X_batch))
 
         return X_batch
 
-    def _noise_video(self, video):
-        video = video.astype(np.float32)
-        video += 2 - 4 * random.rand(*video.shape)
 
-        video = np.maximum(video, 0)
-        video = np.minimum(video, 255)
-
-        # video = video.astype(np.uint8)
-        return video
-
-    def _crop_video(self, video, img_size):
-        cropped_video = []
-        for img in video:
-            img = img.transpose([1, 2, 0])
-            h, w = img.shape[:2]
-            y1, x1 = int(0.2 * random.rand() * h), int(0.2 * random.rand() * h)
-            y2, x2 = h - int(0.2 * random.rand() * h), w - int(0.2 * random.rand() * h)
-
-            img = img[y1:y2, x1:x2]
-            img = cv2.resize(img, (img_size, img_size))
-
-            img = img.transpose([2, 0, 1])
-
-            cropped_video.append(img)
-
-        return np.stack(cropped_video)
+# def noise_video(video):
+#     video = video.astype(np.float32)
+#     video += 2 - 4 * random.rand(*video.shape)
+#
+#     video = np.maximum(video, 0)
+#     video = np.minimum(video, 255)
+#
+#     # video = video.astype(np.uint8)
+#     return video
 
 
 class End2EndTempFusionDataset(End2EndDataset):
@@ -525,8 +563,8 @@ class End2EndTempFusionDataset(End2EndDataset):
         for i in batch_idxs:
             video = torch.load(self.X[i])
             if self.augment_temp:
-                video = self._down_sample(video, self.X_aug_lens[i] + len(self.X_skipped_idxs[i]))
-                video = self._random_skip(video, self.X_skipped_idxs[i])
+                video = down_sample(video, self.X_aug_lens[i] + len(self.X_skipped_idxs[i]))
+                video = random_skip(video, self.X_skipped_idxs[i])
                 video = torch.stack(video)
 
             X_batch.append(video)
@@ -545,9 +583,6 @@ if __name__ == "__main__":
     train_dataset = datasets["Train"]
     train_dataset.start_epoch()
 
-    X_batch, Y_batch, Y_lens = train_dataset.get_batch(0)
+    X_batch, _, _ = train_dataset.get_batch(0)
 
-    print(len(train_dataset.X_lens))
     print(X_batch.size())
-    print(Y_batch.size())
-    print(Y_lens.size())
