@@ -15,51 +15,72 @@ random.seed(0)
 torch.backends.cudnn.deterministic = True
 
 
-def get_wer_info(loaded):
-    best_wer_dir = os.path.split(END2END_WER_PATH)[0]
-    if not os.path.exists(best_wer_dir):
-        os.makedirs(best_wer_dir)
+def get_wer_info(phases=["Train", "Val"]):
+    best_wer = {phase: float("inf") for phase in phases}
 
-    if os.path.exists(END2END_WER_PATH) and loaded:
-        with open(END2END_WER_PATH, 'r') as f:
-            best_wer = float(f.readline().strip())
-            print("BEST " + END2END_CRIT_PHASE + " WER:", best_wer)
-    else:
-        best_wer = float("inf")
-        print("BEST " + END2END_CRIT_PHASE + " WER:", "Not found")
+    for phase in phases:
+        wer_path = phase_path(END2END_WER_PATH, phase)
+        if phase == "Train":
+            wer_path = wer_path.replace(".txt", "_Train.txt")
+
+        if os.path.exists(wer_path):
+            with open(wer_path, 'r') as f:
+                best_wer[phase] = float(f.readline().strip())
+
+        print("BEST", phase, "WER:", best_wer[phase])
 
     return best_wer
 
 
-def save_model(model, best_wer):
-    with open(END2END_WER_PATH, 'w') as f:
-        f.write(str(best_wer) + "\n")
+def phase_path(name, phase):
+    ext = os.path.splitext(name)[1]
+    if phase == "Train":
+        return name.replace(ext, "_Train" + ext)
+    return name
 
+
+def save_model(model, phase, best_wer):
     model_dir = os.path.split(END2END_MODEL_PATH)[0]
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
 
-    torch.save(model.state_dict(), END2END_MODEL_PATH)
+    best_wer_dir = os.path.split(END2END_WER_PATH)[0]
+    if not os.path.exists(best_wer_dir):
+        os.makedirs(best_wer_dir)
+
+    wer_path = phase_path(END2END_WER_PATH, phase)
+
+    with open(wer_path, 'w') as f:
+        f.write(str(best_wer) + "\n")
+
+    torch.save(model.state_dict(), phase_path(END2END_MODEL_PATH, phase))
     print("Model Saved")
 
 
-def get_end2end_model(vocab, load=True):
+def get_end2end_model(vocab, use_overfit=USE_OVERFIT):
     model = SLR(rnn_hidden=512, vocab_size=vocab.size, temp_fusion_type=TEMP_FUSION_TYPE).to(DEVICE)
-    if load and os.path.exists(END2END_MODEL_PATH):
-        loaded = True
+    model_path = END2END_MODEL_PATH
+
+    if use_overfit:
+        model_path = phase_path(END2END_MODEL_PATH, "Train")
+
+    if os.path.exists(model_path):
+        model.load_state_dict(torch.load(model_path, map_location=DEVICE))
+        print("Model Loaded")
+    elif os.path.exists(END2END_MODEL_PATH):
         model.load_state_dict(torch.load(END2END_MODEL_PATH, map_location=DEVICE))
         print("Model Loaded")
     else:
-        loaded = False
+        print("Model Initialized")
 
-    return model, loaded
+    return model
 
 
-def train(model, loaded, vocab, datasets):
+def train(model, vocab, datasets):
     print("END2END model training...")
     print("Mode:", END2END_TRAIN_MODE)
     print("Features:", FRAME_FEAT_MODEL)
-    print("Model path:", END2END_MODEL_PATH)
+    print("Save Model path:", END2END_MODEL_PATH)
     print("WER path:", END2END_WER_PATH)
 
     if END2END_TRAIN_OPTIMIZER == "Adam":
@@ -71,7 +92,7 @@ def train(model, loaded, vocab, datasets):
 
     loss_fn = nn.CTCLoss(zero_infinity=True)
 
-    best_wer = get_wer_info(loaded)
+    best_wer = get_wer_info()
     try:
         for epoch in range(1, END2END_N_EPOCHS + 1):
             print("Epoch", epoch)
@@ -133,9 +154,9 @@ def train(model, loaded, vocab, datasets):
                 phase_loss = np.mean(losses)
                 print(phase, "WER:", phase_wer, "Loss:", phase_loss)
 
-                if phase == END2END_CRIT_PHASE and phase_wer < best_wer:
-                    best_wer = phase_wer
-                    save_model(model, best_wer)
+                if phase_wer < best_wer[phase]:
+                    best_wer[phase] = phase_wer
+                    save_model(model, phase, best_wer[phase])
 
             print()
             print()
@@ -147,7 +168,7 @@ def train(model, loaded, vocab, datasets):
 if __name__ == "__main__":
     vocab = Vocab()
 
-    model, loaded = get_end2end_model(vocab)
+    model = get_end2end_model(vocab)
     datasets = get_end2end_datasets(vocab)
 
-    train(model, loaded, vocab, datasets)
+    train(model, vocab, datasets)

@@ -285,7 +285,7 @@ class End2EndPoseDataset(End2EndDataset):
 
             X_batch.append(video)
 
-        X_batch = torch.from_numpy(np.stack(X_batch).astype(np.float32))
+        X_batch = torch.from_numpy(np.stack(X_batch).astype(np.float32)).unsqueeze(1)
 
         return X_batch
 
