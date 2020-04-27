@@ -4,7 +4,6 @@ import multiprocessing as mp
 import cv2
 import numpy as np
 from feature_extraction.cnn_features import get_images
-from torchvision import transforms
 from utils import *
 from config import *
 
@@ -577,12 +576,83 @@ class End2EndTempFusionDataset(End2EndDataset):
         return L - out_seq_len
 
 
+class GR_dataset():
+    def __init__(self, split, batch_size):
+        self.df = pd.read_csv(os.path.join(ANNO_DIR, "gloss_" + split + ".csv"))
+
+        self.batch_size = batch_size
+        self.mean = np.array([0.43216, 0.394666, 0.37645], dtype=np.float32)
+        self.std = np.array([0.22803, 0.22145, 0.216989], dtype=np.float32)
+        self.batches = [[]]
+
+    def get_sample(self, i):
+        row = self.df.iloc[i]
+        y = int(row.gloss_idx)
+        video_dir = os.path.join(GLOSS_DATA_DIR, row.folder)
+        images = []
+
+        image_files = list(glob.glob(video_dir))
+        image_files.sort()
+
+        for img_file in image_files:
+            img = cv2.imread(img_file)
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            img = cv2.resize(img, (IMG_SIZE_3D, IMG_SIZE_3D))
+            img = img.astype(np.float32) / 255
+            img = (img - self.mean) / self.std
+            images.append(img)
+
+        x = np.stack(images)
+
+        return x, y
+
+    def start_epoch(self):
+        idxs = list(range(self.df.shape[0]))
+        np.random.shuffle(idxs)
+        self.batches = []
+        s = 0
+        while s < len(idxs):
+            e = min(s + self.batch_size, len(idxs))
+            self.batches.append(idxs[s:e])
+            s += self.batch_size
+
+        return len(self.batches)
+
+    def get_batch(self, i):
+        batch_idxs = self.batches[i]
+        X_batch = []
+        Y_batch = []
+        for idx in batch_idxs:
+            x, y = self.get_sample(idx)
+            X_batch.append(x)
+            Y_batch.append(y)
+
+        X_batch = np.stack(X_batch).transpose([0, 4, 1, 2, 3])
+        X_batch = torch.Tensor(X_batch)
+        Y_batch = torch.LongTensor(Y_batch)
+
+        return X_batch, Y_batch
+
+
+def get_gr_datasets(batch_size=GR_BATCH_SIZE):
+    datasets = dict()
+    datasets["Train"] = GR_dataset("train", batch_size)
+    datasets["Val"] = GR_dataset("val", batch_size)
+
+    return datasets
+
+
 if __name__ == "__main__":
     vocab = Vocab()
-    datasets = get_end2end_datasets(vocab)
-    train_dataset = datasets["Train"]
-    train_dataset.start_epoch()
+    # datasets = get_end2end_datasets(vocab)
+    # train_dataset = datasets["Train"]
+    # train_dataset.start_epoch()
+    #
+    # X_batch, _, _ = train_dataset.get_batch(0)
 
-    X_batch, _, _ = train_dataset.get_batch(0)
+    gr_train = GR_dataset("train", 64)
 
-    print(X_batch.size())
+    gr_train.start_epoch()
+
+    X_batch, Y_batch = gr_train.get_batch(0)
+    print(X_batch.size(), Y_batch.size())

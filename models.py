@@ -191,6 +191,26 @@ class TempFusion_Hand(nn.Module):
         return x
 
 
+class GR(nn.Module):
+    def __init__(self, vocab_size, temp_fusion_type=2):
+        super(GR, self).__init__()
+        if temp_fusion_type == 0:
+            self.temp_fusion = TempFusion()
+        elif temp_fusion_type == 1:
+            self.temp_fusion = TempFusion_Hand()
+        elif temp_fusion_type == 2:
+            self.temp_fusion = TempFusion3D()
+
+        self.fc = nn.Linear(FRAME_FEAT_SIZE, vocab_size)
+
+    def forward(self, x):
+        x = self.temp_fusion(x)
+        x = x.squeeze(1)
+        x = self.fc(x)
+        return x
+
+
+
 class BiLSTM(nn.Module):
     def __init__(self, hidden_size, vocab_size, num_layers=2):
         super(BiLSTM, self).__init__()
@@ -278,10 +298,10 @@ def weights_init(m):
 
 
 if __name__ == "__main__":
-    vgg_s = TempFusion3D().to(DEVICE)
+    vgg_s = GR(vocab_size=1296).to(DEVICE)
     vgg_s.eval()
     batch_size = 8
-    T = 104
+    T = 4
     C = 3
     D = 112
     with torch.no_grad():

@@ -229,7 +229,7 @@ def generate_3dcnn_features():
     with torch.no_grad():
         generate_3dcnn_features_split(model, preprocess, "train")
         generate_3dcnn_features_split(model, preprocess, "test")
-        generate_3dcnn_features_split(model, preprocess, "dev", )
+        generate_3dcnn_features_split(model, preprocess, "dev")
 
 
 def save_glosses(images, gloss_idx, temporal_stride):
@@ -262,9 +262,8 @@ def down_sample_images(images, temp_stride=4):
 def generate_gloss_dataset():
     vocab = Vocab()
     model = SLR(rnn_hidden=512, vocab_size=vocab.size, temp_fusion_type=2).to(DEVICE)
-    model_path = os.path.join("..", TEMP_FUSION_END2END_MODEL_PATH)
-    if os.path.exists(model_path):
-        model.load_state_dict(torch.load(model_path, map_location=DEVICE))
+    if os.path.exists(OVERFIT_END2END_MODEL_PATH):
+        model.load_state_dict(torch.load(OVERFIT_END2END_MODEL_PATH, map_location=DEVICE))
         print("Model Loaded")
     else:
         print("Model doesnt exist")
@@ -313,15 +312,20 @@ def generate_gloss_dataset():
             if SHOW_PROGRESS:
                 pp.show(idx)
 
-            if idx > 5: break
-
         pp.end()
 
     Y_gloss = [vocab.idx2gloss[i] for i in Y]
 
     df = pd.DataFrame({"folder": gloss_paths, "gloss": Y_gloss, "gloss_idx": Y})
 
-    df.to_csv(os.path.join(ANNO_DIR, "gloss_dataset.csv"), index=None)
+    L = df.shape[0]
+    idxs = list(range(L))
+    np.random.shuffle(idxs)
+    df_train = df.iloc[idxs[:int(0.9 * L)]]
+    df_val = df.iloc[idxs[int(0.9 * L):]]
+
+    df_train.to_csv(os.path.join(ANNO_DIR, "gloss_train.csv"), index=None)
+    df_val.to_csv(os.path.join(ANNO_DIR, "gloss_val.csv"), index=None)
 
 
 if __name__ == "__main__":
