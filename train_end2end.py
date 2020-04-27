@@ -20,9 +20,6 @@ def get_wer_info(phases=["Train", "Val"]):
 
     for phase in phases:
         wer_path = phase_path(END2END_WER_PATH, phase)
-        if phase == "Train":
-            wer_path = wer_path.replace(".txt", "_Train.txt")
-
         if os.path.exists(wer_path):
             with open(wer_path, 'r') as f:
                 best_wer[phase] = float(f.readline().strip())
