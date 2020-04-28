@@ -6,28 +6,26 @@ import PIL
 from config import *
 
 
-class Identity(nn.Module):
-    def forward(self, x):
-        return x
-
-
-class FrameFeatModel(nn.Module):
+class ImgFeat(nn.Module):
     def __init__(self):
-        super(FrameFeatModel, self).__init__()
-        if FRAME_FEAT_MODEL.startswith("densenet121"):
-            self.ffm = models.densenet121(pretrained=True)
-            self.ffm.classifier = Identity()
-        elif FRAME_FEAT_MODEL.startswith("googlenet"):
-            self.ffm = models.googlenet(pretrained=True)
-            self.ffm.fc = Identity()
-        elif FRAME_FEAT_MODEL.startswith("resnet18"):
-            self.ffm = models.resnet18(pretrained=True)
-            self.ffm.fc = nn.Identity()
-        elif FRAME_FEAT_MODEL.startswith("vgg-s"):
-            self.ffm = VGG_S
+        super(ImgFeat, self).__init__()
+        if IMG_FEAT_MODEL.startswith("densenet121"):
+            self.feat_m = models.densenet121(pretrained=True)
+            self.feat_m.classifier = nn.Identity()
+        elif IMG_FEAT_MODEL.startswith("googlenet"):
+            self.feat_m = models.googlenet(pretrained=True)
+            self.feat_m.fc = nn.Identity()
+        elif IMG_FEAT_MODEL.startswith("resnet18"):
+            self.feat_m = models.resnet18(pretrained=True)
+            self.feat_m.fc = nn.Identity()
+        elif IMG_FEAT_MODEL.startswith("vgg-s"):
+            self.feat_m = VGG_S
+        else:
+            print("Incorrect FFM", IMG_FEAT_MODEL)
+            exit(0)
 
     def forward(self, x):
-        return self.ffm(x)
+        return self.feat_m(x)
 
 
 class VGG_S(nn.Module):
@@ -120,88 +118,18 @@ class VGG_S_3D(nn.Module):
         return x
 
 
-class TempFusion(nn.Module):
-    def __init__(self):
-        super(TempFusion, self).__init__()
-
-        self.conv1d_1 = nn.Conv2d(1, 1, kernel_size=(5, 1), padding=(2, 0))
-        self.pool1 = nn.MaxPool2d(kernel_size=(2, 1), stride=(2, 1))
-        self.conv1d_2 = nn.Conv2d(1, 1, kernel_size=(5, 1), padding=(2, 0))
-        self.pool2 = nn.MaxPool2d(kernel_size=(2, 1), stride=(2, 1))
-
-    def forward(self, x):
-        # (batch_size, 1, max_seq_length, 1024 or 411)
-        x = self.conv1d_1(x)
-        x = self.pool1(x)
-        x = self.conv1d_2(x)
-        x = self.pool2(x)
-        x = x.squeeze(1)
-        # (batch_size, max_seq_length // 4, 1024 or 411)
-        return x
-
-
-class TempFusion_FE(nn.Module):
-    def __init__(self, ):
-        super(TempFusion_FE, self).__init__()
-
-        self.fe = FrameFeatModel()
-        if not END2END_TRAIN_FE:
-            self.fe.eval()
-            for param in self.fe.parameters():
-                param.requires_grad = False
-
-        self.simple_temp_fusion = TempFusion()
-
-    def forward(self, x):
-        # (batch_size, max_seq_length, 3, 101, 101)
-        batch_feats = []
-        for video_idx in range(x.shape[0]):
-            video_feat = self.fe(x[video_idx])
-            batch_feats.append(video_feat)
-        batch_feats = torch.stack(batch_feats)
-
-        x = batch_feats.unsqueeze(1)
-        x = self.simple_temp_fusion(x)
-        return x
-
-
-class TempFusion_Hand(nn.Module):
-    def __init__(self):
-        super(TempFusion_Hand, self).__init__()
-
-        self.fe = VGG_S_3D()
-
-        self.conv1d_1 = nn.Conv3d(512, 512, kernel_size=(5, 1, 1), padding=(2, 0, 0))
-        self.pool1 = nn.MaxPool3d(kernel_size=(2, 1, 1), stride=(2, 1, 1))
-        self.conv1d_2 = nn.Conv3d(512, 512, kernel_size=(5, 1, 1), padding=(2, 0, 0))
-        self.pool2 = nn.MaxPool3d(kernel_size=(2, 1, 1), stride=(2, 1, 1))
-
-    def forward(self, x):
-        # (batch_size, 3, max_seq_length, 101, 101)
-        x = self.fe(x)
-        x = self.conv1d_1(x)
-        x = self.pool1(x)
-        x = self.conv1d_2(x)
-        x = self.pool2(x)
-
-        x = x.squeeze()
-
-        x = x.permute(0, 2, 1)
-
-        return x
-
-
 class GR(nn.Module):
-    def __init__(self, vocab_size, temp_fusion_type=2):
+    def __init__(self, vocab_size, use_feat=INP_FEAT, temp_fusion_type=1):
         super(GR, self).__init__()
         if temp_fusion_type == 0:
-            self.temp_fusion = TempFusion()
+            self.temp_fusion = TempFusion2D(use_feat=use_feat)
         elif temp_fusion_type == 1:
-            self.temp_fusion = TempFusion_Hand()
-        elif temp_fusion_type == 2:
             self.temp_fusion = TempFusion3D()
+        else:
+            print("Incorrect temporal fusion type", temp_fusion_type)
+            exit(0)
 
-        self.fc = nn.Linear(FRAME_FEAT_SIZE, vocab_size)
+        self.fc = nn.Linear(IMG_FEAT_SIZE, vocab_size)
 
     def forward(self, x):
         x = self.temp_fusion(x)
@@ -210,13 +138,12 @@ class GR(nn.Module):
         return x
 
 
-
 class BiLSTM(nn.Module):
     def __init__(self, hidden_size, vocab_size, num_layers=2):
         super(BiLSTM, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.lstm = nn.LSTM(input_size=FRAME_FEAT_SIZE, hidden_size=hidden_size, num_layers=num_layers,
+        self.lstm = nn.LSTM(input_size=IMG_FEAT_SIZE, hidden_size=hidden_size, num_layers=num_layers,
                             bidirectional=True)
         self.emb = nn.Linear(hidden_size * 2, vocab_size)
 
@@ -244,21 +171,22 @@ class BiLSTM(nn.Module):
 
 class SLR(nn.Module):
 
-    def __init__(self, rnn_hidden, vocab_size, temp_fusion_type=0):
+    def __init__(self, rnn_hidden, vocab_size, use_feat=INP_FEAT, temp_fusion_type=0):
         # temp_fusion_type = >
-        # 0 => input is video represented by stacking pretrained CNN features
-        # 1 => input is video with fixed length represented by pretrained CNN features
-        # (not 1 or 2) => input is video represented by raw frames
+        # 0 => 2D temporal fusion
+        # 1 => 3D temporal fusion 
         super(SLR, self).__init__()
         self.vgg_s = None
         if temp_fusion_type == 0:
-            self.temp_fusion = TempFusion()
+            self.temp_fusion = TempFusion2D(use_feat=use_feat)
         elif temp_fusion_type == 1:
-            self.temp_fusion = TempFusion_Hand()
-        elif temp_fusion_type == 2:
-            self.temp_fusion = TempFusion3D()
+            if use_feat:
+                self.temp_fusion = nn.Identity()
+            else:
+                self.temp_fusion = TempFusion3D()
         else:
-            self.temp_fusion = Identity()
+            print("Incorrect temporal fusion type", temp_fusion_type)
+            exit(0)
 
         self.seq_model = BiLSTM(rnn_hidden, vocab_size)
 
@@ -287,6 +215,34 @@ class TempFusion3D(nn.Module):
         return x.reshape(-1, x.size(1), 1024)
 
 
+class TempFusion2D(nn.Module):
+    def __init__(self, use_feat):
+        super(TempFusion2D, self).__init__()
+        if use_feat:
+            self.feat_m = nn.Identity()
+        else:
+            self.feat_m = ImgFeat()
+
+        self.tf = nn.Sequential(nn.Conv2d(1, 1, kernel_size=(5, 1), padding=(2, 0)),
+                                nn.MaxPool2d(kernel_size=(2, 1), stride=(2, 1)),
+                                nn.Conv2d(1, 1, kernel_size=(5, 1), padding=(2, 0)),
+                                nn.MaxPool2d(kernel_size=(2, 1), stride=(2, 1)))
+
+        self.use_feat = use_feat
+
+    def forward(self, x):
+        if not self.use_feat:
+            B, T, C, X, Y = x.shape
+            x = x.view(B * T, C, X, Y)
+            x = self.feat_m(x)
+            V = x.size(1)
+            x = x.view(B, 1, T, V)
+
+        x = self.tf(x).squeeze(1)
+
+        return x.permute(1, 0, 2)
+
+
 def weights_init(m):
     classname = m.__class__.__name__
     if type(m) in [nn.Linear, nn.Conv2d, nn.Conv1d]:
@@ -298,15 +254,19 @@ def weights_init(m):
 
 
 if __name__ == "__main__":
-    vgg_s = GR(vocab_size=1296).to(DEVICE)
-    vgg_s.eval()
+    use_feat = False
+    model = SLR(rnn_hidden=512, vocab_size=300, temp_fusion_type=1, use_feat=use_feat).to(DEVICE)
+    model.eval()
     batch_size = 8
-    T = 4
+    T = 12
     C = 3
     D = 112
     with torch.no_grad():
-        inp = torch.rand(batch_size, C, T, D, D).to(DEVICE)
+        if use_feat:
+            inp = torch.rand(batch_size, 1, T, IMG_FEAT_SIZE).to(DEVICE)
+        else:
+            inp = torch.rand(batch_size, C, T, D, D).to(DEVICE)
 
-        out = vgg_s(inp)
+        out = model(inp)
 
         print(out.shape)

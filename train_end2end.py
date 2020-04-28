@@ -76,7 +76,7 @@ def get_end2end_model(vocab, use_overfit=USE_OVERFIT):
 def train(model, vocab, datasets):
     print("END2END model training...")
     print("Mode:", END2END_TRAIN_MODE)
-    print("Features:", FRAME_FEAT_MODEL)
+    print("Features:", IMG_FEAT_MODEL)
     print("Save Model path:", END2END_MODEL_PATH)
     print("WER path:", END2END_WER_PATH)
 

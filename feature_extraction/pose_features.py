@@ -12,7 +12,7 @@ from config import *
 def generate_openpose_features_split(pose_estimator, split):
     with torch.no_grad():
         df = get_split_df(split)
-        print(SOURCE, "Feature extraction:", FRAME_FEAT_MODEL, split, "split")
+        print(SOURCE, "Feature extraction:", IMG_FEAT_MODEL, split, "split")
         L = df.shape[0]
 
         pp = ProgressPrinter(L, 1)
@@ -49,8 +49,8 @@ def generate_openpose_features_split(pose_estimator, split):
 
 
 def generate_openpose_features():
-    if FRAME_FEAT_MODEL not in ["pose"]:
-        print("Incorrect feature extraction model:", FRAME_FEAT_MODEL)
+    if IMG_FEAT_MODEL not in ["pose"]:
+        print("Incorrect feature extraction model:", IMG_FEAT_MODEL)
         exit(0)
 
     pose_estimator = PoseEstimator()

@@ -31,7 +31,7 @@ def split_model(vocab):
     if os.path.exists(GR_TF_MODEL_PATH):
         return
 
-    end2end_model = SLR(rnn_hidden=512, vocab_size=vocab.size, temp_fusion_type=2).to(DEVICE)
+    end2end_model = SLR(rnn_hidden=512, vocab_size=vocab.size, temp_fusion_type=1, use_feat=False).to(DEVICE)
     if os.path.exists(OVERFIT_END2END_MODEL_PATH):
         end2end_model.load_state_dict(torch.load(OVERFIT_END2END_MODEL_PATH, map_location=DEVICE))
         print("Model Loaded")
@@ -87,7 +87,7 @@ def save_model(model, best_acc):
 def train(model, datasets):
     print("GR model training...")
     print("Mode:", END2END_TRAIN_MODE)
-    print("Features:", FRAME_FEAT_MODEL)
+    print("Features:", IMG_FEAT_MODEL)
     best_acc = get_best_acc()
     optimizer = Adam(model.parameters(), lr=GR_LR)
 

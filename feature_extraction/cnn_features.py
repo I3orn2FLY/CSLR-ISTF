@@ -9,7 +9,7 @@ import os
 sys.path.append(".." + os.sep)
 
 from utils import *
-from models import FrameFeatModel, TempFusion3D, SLR
+from models import ImgFeat, TempFusion3D, SLR
 from config import *
 
 
@@ -97,7 +97,7 @@ def generate_cnn_features_split(model, device, preprocess, split, batch_size):
 
         df = get_split_df(split)
 
-        print(SOURCE, FRAME_FEAT_MODEL, "feature extraction:", split, "split")
+        print(SOURCE, IMG_FEAT_MODEL, "feature extraction:", split, "split")
         L = df.shape[0]
 
         pp = ProgressPrinter(L, 10)
@@ -147,17 +147,17 @@ def generate_cnn_features_split(model, device, preprocess, split, batch_size):
 
 
 def generate_cnn_features(batch_size=FEAT_EX_BATCH_SIZE):
-    if FRAME_FEAT_MODEL.startswith("pose") or FRAME_FEAT_MODEL.startswith("resnet{2+1}d"):
-        print("Incorrect feature extraction model:", FRAME_FEAT_MODEL)
+    if IMG_FEAT_MODEL.startswith("pose") or IMG_FEAT_MODEL.startswith("resnet{2+1}d"):
+        print("Incorrect feature extraction model:", IMG_FEAT_MODEL)
         exit(0)
 
     device = DEVICE
-    model = FrameFeatModel().to(device)
+    model = ImgFeat().to(device)
     model.eval()
 
     preprocess = transforms.Compose([
         transforms.Resize(256),
-        transforms.CenterCrop(224),
+        transforms.CenterCrop(IMG_SIZE_2D),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
@@ -174,7 +174,7 @@ def generate_3dcnn_features_split(model, preprocess, split):
 
         df = get_split_df(split)
 
-        print(SOURCE, FRAME_FEAT_MODEL, "feature extraction:", split, "split")
+        print(SOURCE, IMG_FEAT_MODEL, "feature extraction:", split, "split")
         L = df.shape[0]
 
         pp = ProgressPrinter(L, 10)
@@ -216,8 +216,8 @@ def generate_3dcnn_features_split(model, preprocess, split):
 
 
 def generate_3dcnn_features():
-    if not FRAME_FEAT_MODEL.startswith("resnet{2+1}d"):
-        print("Incorrect feature extraction model:", FRAME_FEAT_MODEL)
+    if not IMG_FEAT_MODEL.startswith("resnet{2+1}d"):
+        print("Incorrect feature extraction model:", IMG_FEAT_MODEL)
         exit(0)
 
     model = TempFusion3D().to(DEVICE)
@@ -261,7 +261,10 @@ def down_sample_images(images, temp_stride=4):
 
 def generate_gloss_dataset():
     vocab = Vocab()
-    model = SLR(rnn_hidden=512, vocab_size=vocab.size, temp_fusion_type=2).to(DEVICE)
+    model = SLR(rnn_hidden=512, vocab_size=vocab.size, temp_fusion_type=1, use_feat=False).to(DEVICE)
+    if not IMG_FEAT_MODEL.startswith("resnet{2+1}d(img_112x112)"):
+        print("Incorrect feature extraction model:", IMG_FEAT_MODEL)
+        exit(0)
     if os.path.exists(OVERFIT_END2END_MODEL_PATH):
         model.load_state_dict(torch.load(OVERFIT_END2END_MODEL_PATH, map_location=DEVICE))
         print("Model Loaded")

@@ -49,19 +49,25 @@ def get_end2end_datasets(vocab, include_test=False):
     args = {"vocab": vocab, "split": "train", "max_batch_size": END2END_BATCH_SIZE,
             "augment_temp": END2END_DATA_AUG_TEMP, "augment_frame": END2END_DATA_AUG_FRAME}
 
-    if FRAME_FEAT_MODEL.startswith("pose"):
-        dataset_class = End2EndPoseDataset
-    elif FRAME_FEAT_MODEL.startswith("densenet121") or FRAME_FEAT_MODEL.startswith("googlenet"):
-        dataset_class = End2EndImgFeatDataset
-    elif FRAME_FEAT_MODEL.startswith("resnet{2+1}d"):
-        if TEMP_FUSION_TYPE == 2:
-            dataset_class = End2EndRawDataset
-            args["img_size"] = 112
-        else:
+    if INP_FEAT:
+        if IMG_FEAT_MODEL.startswith("pose"):
+            dataset_class = End2EndPoseDataset
+        elif IMG_FEAT_MODEL.startswith("densenet121") or IMG_FEAT_MODEL.startswith("googlenet"):
+            dataset_class = End2EndImgFeatDataset
+        elif IMG_FEAT_MODEL.startswith("resnet{2+1}d"):
             dataset_class = End2EndTempFusionDataset
-    elif FRAME_FEAT_MODEL.startswith("vgg-s") and END2END_TRAIN_MODE == "HAND":
-        args["img_size"] = 101
+        else:
+            print("Not implemented", IMG_FEAT_MODEL, TEMP_FUSION_TYPE)
+            exit(0)
+    else:
         dataset_class = End2EndRawDataset
+        if TEMP_FUSION_TYPE == 0:
+            args["img_size"] = IMG_SIZE_2D
+        elif TEMP_FUSION_TYPE == 1:
+            args["img_size"] = IMG_SIZE_3D
+        else:
+            print("Incorrect temp fusion type", TEMP_FUSION_TYPE)
+            exit(0)
 
     tr_dataset = dataset_class(**args)
     args["split"] = "dev"
@@ -104,7 +110,7 @@ class End2EndDataset():
 
         # self.mean = np.load(os.path.join(VARS_DIR, os.path.split(PH_HANDS_NP_IMGS_DIR)[1] + "_mean.npy"))
         # self.std = np.load(os.path.join(VARS_DIR, os.path.split(PH_HANDS_NP_IMGS_DIR)[1] + "_std.npy"))
-        ffm = FRAME_FEAT_MODEL
+        ffm = IMG_FEAT_MODEL
 
         prefix_dir = os.sep.join([VARS_DIR, "End2EndDataset", SOURCE, END2END_TRAIN_MODE, ffm])
 
@@ -249,8 +255,8 @@ class End2EndDataset():
 
 class End2EndPoseDataset(End2EndDataset):
     def __init__(self, vocab, split, max_batch_size, augment_frame=True, augment_temp=True):
-        if not FRAME_FEAT_MODEL.startswith("pose"):
-            print("Incorrect feat model:", FRAME_FEAT_MODEL)
+        if not IMG_FEAT_MODEL.startswith("pose"):
+            print("Incorrect feat model:", IMG_FEAT_MODEL)
             exit(0)
         super(End2EndPoseDataset, self).__init__(vocab, split, max_batch_size, augment_frame, augment_temp)
 
@@ -292,8 +298,8 @@ class End2EndPoseDataset(End2EndDataset):
 
 class End2EndImgFeatDataset(End2EndDataset):
     def __init__(self, vocab, split, max_batch_size, augment_frame=True, augment_temp=True):
-        if not FRAME_FEAT_MODEL.startswith("densenet121") or not FRAME_FEAT_MODEL.startswith("googlenet"):
-            print("Incorrect feat model:", FRAME_FEAT_MODEL)
+        if not IMG_FEAT_MODEL.startswith("densenet121") or not IMG_FEAT_MODEL.startswith("googlenet"):
+            print("Incorrect feat model:", IMG_FEAT_MODEL)
             exit(0)
         super(End2EndImgFeatDataset, self).__init__(vocab, split, max_batch_size, augment_frame, augment_temp)
 
@@ -413,10 +419,13 @@ def get_video_worker(args):
 
 class End2EndRawDataset(End2EndDataset):
     def __init__(self, vocab, split, max_batch_size, img_size, augment_frame=True, augment_temp=True):
-        # need some constraint here
-
+        # maybe implement this
+        if END2END_TRAIN_MODE == "HAND" or TEMP_FUSION_TYPE == 0:
+            print("Not implemented", END2END_TRAIN_MODE, IMG_FEAT_MODEL, TEMP_FUSION_TYPE)
+            exit(0)
         super(End2EndRawDataset, self).__init__(vocab, split, max_batch_size, augment_frame, augment_temp)
         self.img_size = img_size
+
         self.mean = np.array([0.43216, 0.394666, 0.37645], dtype=np.float32)
         self.std = np.array([0.22803, 0.22145, 0.216989], dtype=np.float32)
 
@@ -533,8 +542,8 @@ class End2EndRawDataset(End2EndDataset):
 
 class End2EndTempFusionDataset(End2EndDataset):
     def __init__(self, vocab, split, max_batch_size, augment_frame=True, augment_temp=True):
-        if not FRAME_FEAT_MODEL.startswith("resnet{2+1}d") and TEMP_FUSION_TYPE != 3:
-            print("Incorrect feat model:", FRAME_FEAT_MODEL, TEMP_FUSION_TYPE)
+        if not IMG_FEAT_MODEL.startswith("resnet{2+1}d") and TEMP_FUSION_TYPE != 3:
+            print("Incorrect feat model:", IMG_FEAT_MODEL, TEMP_FUSION_TYPE)
             exit(0)
         super(End2EndTempFusionDataset, self).__init__(vocab, split, max_batch_size, augment_frame, augment_temp)
 
