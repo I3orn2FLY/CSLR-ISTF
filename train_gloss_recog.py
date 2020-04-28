@@ -28,7 +28,7 @@ def get_best_acc():
 
 
 def split_model(vocab):
-    if os.path.exists(GR_TF_MODEL_PATH):
+    if os.path.exists(GR_TF_MODEL_PATH) and not SPLIT_MODEL:
         return
 
     end2end_model = SLR(rnn_hidden=512, vocab_size=vocab.size, temp_fusion_type=1, use_feat=False).to(DEVICE)

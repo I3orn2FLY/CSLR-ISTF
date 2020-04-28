@@ -138,12 +138,9 @@ def generate_cnn_features_split(model, device, preprocess, split, batch_size):
 
             if SHOW_PROGRESS:
                 pp.show(idx)
-            else:
-                if idx % 500 == 0:
-                    pp.show(idx)
-                    print()
 
-        print()
+        if SHOW_PROGRESS:
+            pp.end()
 
 
 def generate_cnn_features(batch_size=FEAT_EX_BATCH_SIZE):
@@ -207,12 +204,9 @@ def generate_3dcnn_features_split(model, preprocess, split):
 
             if SHOW_PROGRESS:
                 pp.show(idx)
-            else:
-                if idx % 500 == 0:
-                    pp.show(idx)
-                    print()
 
-        print()
+        if SHOW_PROGRESS:
+            pp.end()
 
 
 def generate_3dcnn_features():
