@@ -259,8 +259,8 @@ def generate_gloss_dataset():
     if not IMG_FEAT_MODEL.startswith("resnet{2+1}d(img_112x112)"):
         print("Incorrect feature extraction model:", IMG_FEAT_MODEL)
         exit(0)
-    if os.path.exists(OVERFIT_END2END_MODEL_PATH):
-        model.load_state_dict(torch.load(OVERFIT_END2END_MODEL_PATH, map_location=DEVICE))
+    if os.path.exists(GR_END2END_MODEL_PATH):
+        model.load_state_dict(torch.load(GR_END2END_MODEL_PATH, map_location=DEVICE))
         print("Model Loaded")
     else:
         print("Model doesnt exist")
@@ -306,10 +306,13 @@ def generate_gloss_dataset():
 
             assert (len(Y) == len(gloss_paths))
 
+            gloss_idx = len(Y)
             if SHOW_PROGRESS:
                 pp.show(idx)
 
-        pp.end()
+
+        if SHOW_PROGRESS:
+            pp.end()
 
     Y_gloss = [vocab.idx2gloss[i] for i in Y]
 
