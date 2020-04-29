@@ -58,6 +58,17 @@ def get_end2end_model(vocab, use_overfit=USE_OVERFIT):
     model = SLR(rnn_hidden=512, vocab_size=vocab.size, temp_fusion_type=TEMP_FUSION_TYPE).to(DEVICE)
     model_path = END2END_MODEL_PATH
 
+    if BUILD_MODEL_FROM_GR:
+        if os.path.exists(GR_TF_MODEL_PATH):
+            model.temp_fusion.load_state_dict(torch.load(GR_TF_MODEL_PATH, map_location=DEVICE))
+            model.seq_model.load_state_dict(torch.load(GR_SEQ_MODEL_PATH, map_location=DEVICE))
+            print("Model Loaded and Build")
+        else:
+            print("Cannot build model path doesn't exist")
+            exit(0)
+
+        return
+
     if use_overfit:
         model_path = phase_path(END2END_MODEL_PATH, "Train")
 
