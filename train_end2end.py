@@ -67,7 +67,7 @@ def get_end2end_model(vocab, use_overfit=USE_OVERFIT):
             print("Cannot build model path doesn't exist")
             exit(0)
 
-        return
+        return model
 
     if use_overfit:
         model_path = phase_path(END2END_MODEL_PATH, "Train")
