@@ -129,11 +129,11 @@ class GR(nn.Module):
             print("Incorrect temporal fusion type", temp_fusion_type)
             exit(0)
 
-        self.fc = nn.Linear(IMG_FEAT_SIZE, vocab_size)
+        self.fc = nn.Linear(IMG_FEAT_SIZE * 2, vocab_size)
 
     def forward(self, x):
         x = self.temp_fusion(x)
-        x = x.squeeze(1)
+        x = x.view(-1, 2 * IMG_FEAT_SIZE)
         x = self.fc(x)
         return x
 

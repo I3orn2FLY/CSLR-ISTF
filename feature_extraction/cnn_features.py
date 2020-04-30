@@ -226,31 +226,31 @@ def generate_3dcnn_features():
         generate_3dcnn_features_split(model, preprocess, "dev")
 
 
-def save_glosses(images, gloss_idx, temporal_stride):
+def save_glosses(images, pad_image, gloss_idx, stride):
     gloss_paths = []
-    for j in range(len(images) // temporal_stride):
 
-        gloss_path = os.path.join(GLOSS_DATA_DIR, str(gloss_idx))
-        if not os.path.exists(gloss_path):
-            os.makedirs(gloss_path)
+    s = 0
+    p = stride // 2
 
-        for idx, image in enumerate(images[j * temporal_stride: (j + 1) * temporal_stride]):
-            cv2.imwrite(os.path.join(gloss_path, str(idx) + ".jpg"), image)
+    images = p * [pad_image] + images + p * [pad_image]
+    while s < len(images):
+        e = min(len(images), s + 2 * stride)
+        if e - s > stride:
+            gloss_images = images[s:e]
+            gloss_path = os.path.join(GLOSS_DATA_DIR, str(gloss_idx))
+            if not os.path.exists(gloss_path):
+                os.makedirs(gloss_path)
 
-        gloss_paths.append(os.path.join(str(gloss_idx), "*.jpg"))
+            for idx, image in enumerate(gloss_images):
+                cv2.imwrite(os.path.join(gloss_path, str(idx) + ".jpg"), image)
 
-        gloss_idx += 1
+            gloss_paths.append(os.path.join(str(gloss_idx), "*.jpg"))
+
+            gloss_idx += 1
+
+        s += stride
 
     return gloss_paths
-
-
-def down_sample_images(images, temp_stride=4):
-    L = len(images)
-    n_gloss = L // temp_stride
-    des_L = int(n_gloss * temp_stride)
-    idxs = np.linspace(0, L - 1, des_L)
-    imgs = [images[int(round(i))] for i in idxs]
-    return imgs
 
 
 def generate_gloss_dataset():
@@ -267,6 +267,10 @@ def generate_gloss_dataset():
         exit(0)
 
     model.eval()
+
+    pad_image = 255 * np.ones((IMG_SIZE_3D, IMG_SIZE_3D, 3)) * np.array([0.406, 0.485, 0.456])
+
+    pad_image = pad_image.astype(np.uint8)
 
     temp_stride = 4
     df = get_split_df("train")
@@ -294,8 +298,7 @@ def generate_gloss_dataset():
             if len(images) < 4:
                 continue
 
-            images = down_sample_images(images, temp_stride=temp_stride)
-            gloss_paths += save_glosses(images, gloss_idx, temp_stride)
+            gloss_paths += save_glosses(images, pad_image, gloss_idx, temp_stride)
 
             tensor_video = get_tensor_video(images, preprocess, resize=False, change_color=True).unsqueeze(0)
             preds = model(tensor_video).squeeze(1).log_softmax(dim=1).argmax(dim=1)
@@ -309,7 +312,6 @@ def generate_gloss_dataset():
             gloss_idx = len(Y)
             if SHOW_PROGRESS:
                 pp.show(idx)
-
 
         if SHOW_PROGRESS:
             pp.end()
