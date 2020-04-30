@@ -15,16 +15,16 @@ random.seed(0)
 torch.backends.cudnn.deterministic = True
 
 
-def get_best_acc():
-    if os.path.exists(GR_ACC_PATH):
-        with open(GR_ACC_PATH, 'r') as f:
-            best_acc = float(f.readline().strip())
-            print("BEST GR ACC:", best_acc)
+def get_best_loss():
+    if os.path.exists(GR_LOSS_PATH):
+        with open(GR_LOSS_PATH, 'r') as f:
+            best_loss = float(f.readline().strip())
+            print("BEST GR LOSS:", best_loss)
     else:
-        best_acc = 0
-        print("BEST GR ACC:", best_acc)
+        best_loss = float("inf")
+        print("BEST GR LOSS:", best_loss)
 
-    return best_acc
+    return best_loss
 
 
 def split_model(vocab):
@@ -68,13 +68,13 @@ def get_GR_model(vocab):
     return model
 
 
-def save_model(model, best_acc):
-    best_acc_dir = os.path.split(GR_ACC_PATH)[0]
-    if not os.path.exists(best_acc_dir):
-        os.makedirs(best_acc_dir)
+def save_model(model, best_loss):
+    best_loss_dir = os.path.split(GR_LOSS_PATH)[0]
+    if not os.path.exists(best_loss_dir):
+        os.makedirs(best_loss_dir)
 
-    with open(GR_ACC_PATH, 'w') as f:
-        f.write(str(best_acc) + "\n")
+    with open(GR_LOSS_PATH, 'w') as f:
+        f.write(str(best_loss) + "\n")
 
     temp_fusion = model.temp_fusion
     fc_model = model.fc
@@ -88,7 +88,7 @@ def train(model, datasets):
     print("GR model training...")
     print("Mode:", END2END_TRAIN_MODE)
     print("Features:", IMG_FEAT_MODEL)
-    best_acc = get_best_acc()
+    best_loss = get_best_loss()
     optimizer = Adam(model.parameters(), lr=GR_LR)
 
     loss_fn = nn.CrossEntropyLoss()
@@ -133,24 +133,25 @@ def train(model, datasets):
                             optimizer.step()
 
                         if SHOW_PROGRESS:
-                            pp.show(i)
+                            pp.show(i, "Loss: %.3f" % np.mean(losses))
 
                     if SHOW_PROGRESS:
                         pp.end()
 
+                phase_loss = np.mean(losses)
                 phase_acc = sum(correct) / len(correct * GR_BATCH_SIZE) * 100
 
-                print(phase, "phase ACC:", phase_acc, "loss:", np.mean(losses))
+                print(phase, "loss:", phase_loss, "phase ACC:", phase_acc)
 
-                if phase == "Val" and phase_acc > best_acc:
-                    best_acc = phase_acc
-                    save_model(model, best_acc)
+                if phase == "Val" and phase_loss < best_loss:
+                    best_loss = phase_loss
+                    save_model(model, best_loss)
 
             print()
             print()
     except KeyboardInterrupt:
         pass
-    print("\nTraining complete:", "Best ACC:", best_acc)
+    print("\nTraining complete:", "Best LOSS:", best_loss)
 
 
 if __name__ == "__main__":

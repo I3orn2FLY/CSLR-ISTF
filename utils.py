@@ -84,7 +84,7 @@ class ProgressPrinter():
     def omit(self):
         self.omit_n += 1
 
-    def show(self, cur_idx):
+    def show(self, cur_idx, something=""):
         cur_idx += 1
 
         if cur_idx % self.step != 0:
@@ -97,7 +97,7 @@ class ProgressPrinter():
         minutes = time_left % 3600 // 60
         seconds = time_left % 60
 
-        print("\rProgress: %.2f" % (cur_idx * 100 / self.L) + "% "
+        print("\r" + something + " Progress: %.2f" % (cur_idx * 100 / self.L) + "% "
               + str(hours) + " hours "
               + str(minutes) + " minutes "
               + str(seconds) + " seconds left", end=" ")
