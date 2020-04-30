@@ -91,7 +91,11 @@ def train(model, datasets):
     best_loss = get_best_loss()
     optimizer = Adam(model.parameters(), lr=GR_LR)
 
-    loss_fn = nn.CrossEntropyLoss()
+    if IGNORE_INDEX:
+        loss_fn = nn.CrossEntropyLoss()
+    else:
+
+        loss_fn = nn.CrossEntropyLoss()
 
     try:
         for epoch in range(1, END2END_N_EPOCHS + 1):
