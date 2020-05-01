@@ -61,7 +61,8 @@ def get_end2end_model(vocab, use_overfit=USE_OVERFIT):
     if BUILD_MODEL_FROM_GR:
         if os.path.exists(GR_TF_MODEL_PATH):
             model.temp_fusion.load_state_dict(torch.load(GR_TF_MODEL_PATH, map_location=DEVICE))
-            model.seq_model.load_state_dict(torch.load(GR_SEQ_MODEL_PATH, map_location=DEVICE))
+            if BUILD_SEQ_FROM_GR:
+                model.seq_model.load_state_dict(torch.load(GR_SEQ_MODEL_PATH, map_location=DEVICE))
             print("Model Loaded and Build")
         else:
             print("Cannot build model path doesn't exist")
