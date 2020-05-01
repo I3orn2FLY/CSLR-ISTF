@@ -1,16 +1,19 @@
-# import ctcdecode
 import torch
 import torch.nn as nn
 import numpy as np
 import Levenshtein as Lev
-from numpy import random
-from torch.optim import Adam, RMSprop, SGD
-from utils import ProgressPrinter, Vocab, predict_glosses
+from torch.optim import Adam
+import sys
+import os
+
+sys.path.append(".." + os.sep)
+from utils import ProgressPrinter, Vocab
+from common import predict_glosses
 from dataset import get_end2end_datasets
-from models import SLR, weights_init
+from models import SLR
 from config import *
 
-random.seed(0)
+np.random.seed(0)
 
 torch.backends.cudnn.deterministic = True
 
@@ -92,13 +95,7 @@ def train(model, vocab, datasets):
     print("Save Model path:", END2END_MODEL_PATH)
     print("WER path:", END2END_WER_PATH)
 
-    if END2END_TRAIN_OPTIMIZER == "Adam":
-        optimizer = Adam(model.parameters(), lr=END2END_LR)
-    elif END2END_TRAIN_OPTIMIZER == "RMSProp":
-        optimizer = RMSprop(model.parameters(), lr=END2END_LR)
-    else:
-        optimizer = SGD(model.parameters(), lr=END2END_LR)
-
+    optimizer = Adam(model.parameters(), lr=END2END_LR)
     loss_fn = nn.CTCLoss(zero_infinity=True)
 
     best_wer = get_wer_info()

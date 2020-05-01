@@ -1,10 +1,16 @@
-import glob
 import torch
-from config import *
-from train_utils import get_model, predict_glosses
-from utils import ProgressPrinter, Vocab
+import sys
+import os
 import numpy as np
+from train_end2end import get_end2end_model
 
+sys.path.append(".." + os.sep)
+from common import predict_glosses
+from config import *
+from utils import ProgressPrinter, Vocab
+
+
+# TODO write eval for thesis results
 
 def decode_prediction(pred, vocab):
     pred = pred.permute(1, 0, 2).squeeze(0).argmax(dim=1).cpu().numpy()
@@ -32,7 +38,7 @@ def decode_prediction(pred, vocab):
 
 def create_ctm_file_split(split):
     vocab = Vocab()
-    model, loaded, model_path = get_model(END2END_TRAIN_MODE, vocab, END2END_TRAIN_LOAD)
+    model = get_end2end_model(vocab)
     model.eval()
 
     gt_ctm_val_file = os.sep.join([PH_EVA_DIR, "phoenix2014-groundtruth-" + split + ".stm"])
@@ -45,10 +51,9 @@ def create_ctm_file_split(split):
         dirs.append(line.split(" ")[0])
 
     prefix = VIDEO_FEAT_DIR
-    out_ctm_file = model_path.replace(model_path.split("_")[-1], split + ".ctm")
-    out_ctm_file = os.path.split(out_ctm_file)[1]
+    out_ctm_path = MODEL_PATH_SUFFIX.replace(".pt", "_" + split + ".ctm")
 
-    with open(os.sep.join([PH_EVA_DIR, out_ctm_file]), 'w') as f:
+    with open(os.sep.join([PH_EVA_DIR, out_ctm_path]), 'w') as f:
 
         with torch.no_grad():
             for idx, dir in enumerate(dirs):
