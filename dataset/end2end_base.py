@@ -76,10 +76,6 @@ class End2EndDataset():
         raise NotImplementedError
 
     def _build_dataset(self):
-        print("Building", self.split, "dataset")
-
-        # self.mean = np.load(os.path.join(VARS_DIR, os.path.split(PH_HANDS_NP_IMGS_DIR)[1] + "_mean.npy"))
-        # self.std = np.load(os.path.join(VARS_DIR, os.path.split(PH_HANDS_NP_IMGS_DIR)[1] + "_std.npy"))
         ffm = IMG_FEAT_MODEL
 
         prefix_dir = os.sep.join([VARS_DIR, "End2EndDataset", SOURCE, END2END_TRAIN_MODE, ffm])
@@ -98,6 +94,7 @@ class End2EndDataset():
             with open(X_lens_path, 'rb') as f:
                 self.X_lens = pickle.load(f)
         else:
+            print("Building", self.split, "dataset")
             df = get_split_df(self.split)
             self.X = []
             self.Y = []

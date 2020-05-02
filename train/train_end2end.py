@@ -48,9 +48,7 @@ def save_model(model, phase, best_wer):
     if not os.path.exists(best_wer_dir):
         os.makedirs(best_wer_dir)
 
-    wer_path = phase_path(END2END_WER_PATH, phase)
-
-    with open(wer_path, 'w') as f:
+    with open(phase_path(END2END_WER_PATH, phase), 'w') as f:
         f.write(str(best_wer) + "\n")
 
     torch.save(model.state_dict(), phase_path(END2END_MODEL_PATH, phase))
@@ -60,6 +58,12 @@ def save_model(model, phase, best_wer):
 def get_end2end_model(vocab, use_overfit=USE_OVERFIT):
     model = SLR(rnn_hidden=512, vocab_size=vocab.size, temp_fusion_type=TEMP_FUSION_TYPE).to(DEVICE)
     model_path = END2END_MODEL_PATH
+    if INP_FEAT and os.path.exists(END2END_MODEL_PATH):
+        model.load_state_dict(torch.load(END2END_MODEL_PATH, map_location=DEVICE))
+        print("Model Loaded")
+    elif INP_FEAT:
+        print("Model Initialized")
+        return model
 
     if BUILD_MODEL_FROM_GR:
         if os.path.exists(GR_TF_MODEL_PATH):

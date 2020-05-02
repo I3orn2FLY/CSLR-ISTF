@@ -37,13 +37,14 @@ def save_glosses(images, pad_image, gloss_idx, stride):
 
 def generate_gloss_dataset():
     vocab = Vocab()
-    model = SLR(rnn_hidden=512, vocab_size=vocab.size, temp_fusion_type=1, use_feat=False).to(DEVICE)
-    if not IMG_FEAT_MODEL.startswith("resnet{2+1}d(img_112x112)"):
-        print("Incorrect feature extraction model:", IMG_FEAT_MODEL)
+    if not IMG_FEAT_MODEL.startswith("resnet{2+1}d") or TEMP_FUSION_TYPE != 1:
+        print("Incorrect feature extraction model:", IMG_FEAT_MODEL, TEMP_FUSION_TYPE)
         exit(0)
 
-    if os.path.exists(GR_END2END_MODEL_PATH):
-        model.load_state_dict(torch.load(GR_END2END_MODEL_PATH, map_location=DEVICE))
+    model = SLR(rnn_hidden=512, vocab_size=vocab.size, temp_fusion_type=1).to(DEVICE)
+
+    if os.path.exists(END2END_MODEL_PATH):
+        model.load_state_dict(torch.load(END2END_MODEL_PATH, map_location=DEVICE))
         print("Model Loaded")
     else:
         print("Model doesnt exist")
@@ -72,16 +73,25 @@ def generate_gloss_dataset():
                 video_dir = os.sep.join([VIDEOS_DIR, "train", row.folder])
             elif SOURCE == "KRSL":
                 video_dir = os.path.join(VIDEOS_DIR, row.video)
-
+            else:
+                print("Wrong Dataset:", SOURCE)
+                exit(0)
             images = get_images(video_dir, size=(IMG_SIZE_3D, IMG_SIZE_3D))
             if len(images) < 4:
                 continue
 
-            gloss_paths += save_glosses(images, pad_image, gloss_idx, temp_stride)
+            if INP_FEAT:
+                if SOURCE == "PH":
+                    feat_path = os.sep.join([VIDEO_FEAT_DIR, "train", row.folder.replace("/1/*.png", ".pt")])
+                elif SOURCE == "KRSL":
+                    feat_path = os.path.join(VIDEO_FEAT_DIR, row.video).replace(".mp4", ".pt")
 
-            tensor_video = get_tensor_video(images, preprocess_3d, "3D").unsqueeze(0).to(DEVICE)
+                tensor_video = torch.load(feat_path).unsqueeze(0).to(DEVICE)
+            else:
+                tensor_video = get_tensor_video(images, preprocess_3d, "3D").unsqueeze(0).to(DEVICE)
             preds = model(tensor_video).squeeze(1).log_softmax(dim=1).argmax(dim=1)
 
+            gloss_paths += save_glosses(images, pad_image, gloss_idx, temp_stride)
             for i in range(preds.size(0)):
                 gloss = preds[i].item()
                 Y.append(gloss)

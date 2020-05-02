@@ -6,8 +6,10 @@ import numpy as np
 from end2end_base import End2EndDataset, random_skip, down_sample
 
 sys.path.append(".." + os.sep)
-
+from utils import Vocab
 from config import *
+
+
 # TODO test this
 
 class End2EndImgFeatDataset(End2EndDataset):
@@ -50,3 +52,16 @@ class End2EndImgFeatDataset(End2EndDataset):
         X_batch = torch.stack(X_batch).unsqueeze(1)
 
         return X_batch
+
+
+if __name__ == "__main__":
+    vocab = Vocab()
+    dataset = End2EndImgFeatDataset(vocab, "train", 24, True, True)
+
+    dataset.start_epoch()
+
+    X_batch, Y_batch, Y_lens = dataset.get_batch(0)
+
+    print(X_batch.size())
+    print(Y_batch.size())
+    print(Y_lens.size())
