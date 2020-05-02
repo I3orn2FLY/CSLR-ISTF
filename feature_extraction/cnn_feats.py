@@ -52,7 +52,7 @@ def generate_cnn_features_split(model, preprocess, split, mode):
             video_dir = os.path.join(VIDEOS_DIR, row.video)
             feat_path = os.path.join(VIDEO_FEAT_DIR, row.video).replace(".mp4", ".pt")
 
-        if os.path.exists(feat_path):
+        if os.path.exists(feat_path) and not FEAT_OVERRIDE:
             pp.omit()
             continue
 
