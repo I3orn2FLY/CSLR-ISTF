@@ -176,7 +176,6 @@ class SLR(nn.Module):
         # 0 => 2D temporal fusion
         # 1 => 3D temporal fusion 
         super(SLR, self).__init__()
-        self.vgg_s = None
         if temp_fusion_type == 0:
             self.temp_fusion = TempFusion2D(use_feat=use_feat)
         elif temp_fusion_type == 1:

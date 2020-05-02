@@ -2,9 +2,9 @@ import torch
 import sys
 import os
 import numpy as np
-from train_end2end import get_end2end_model
 
 sys.path.append(".." + os.sep)
+from models import SLR
 from common import predict_glosses
 from config import *
 from utils import ProgressPrinter, Vocab
@@ -36,11 +36,7 @@ def decode_prediction(pred, vocab):
     return out_sentence, start_times, durations
 
 
-def create_ctm_file_split(split):
-    vocab = Vocab()
-    model = get_end2end_model(vocab)
-    model.eval()
-
+def create_ctm_file_split(model, vocab, split):
     gt_ctm_val_file = os.sep.join([PH_EVA_DIR, "phoenix2014-groundtruth-" + split + ".stm"])
 
     with open(gt_ctm_val_file, 'r') as f:
@@ -50,18 +46,13 @@ def create_ctm_file_split(split):
     for line in lines:
         dirs.append(line.split(" ")[0])
 
-    prefix = VIDEO_FEAT_DIR
     out_ctm_path = MODEL_PATH_SUFFIX.replace(".pt", "_" + split + ".ctm")
-
     with open(os.sep.join([PH_EVA_DIR, out_ctm_path]), 'w') as f:
 
         with torch.no_grad():
             for idx, dir in enumerate(dirs):
-                feat_path = os.sep.join([prefix, split, dir, "1.npy"])
-                feats = np.load(feat_path)
-                inp = torch.Tensor(feats).to(DEVICE).unsqueeze(0)
-                if END2END_TRAIN_MODE == "FULL":
-                    inp = inp.unsqueeze(1)
+                feat_path = os.sep.join([VIDEO_FEAT_DIR, split, dir + ".pt"])
+                inp = torch.load(feat_path).to(DEVICE).unsqueeze(0)
 
                 pred = model(inp).log_softmax(dim=2)
 
@@ -71,4 +62,11 @@ def create_ctm_file_split(split):
 
 
 if __name__ == "__main__":
-    create_ctm_file_split("test")
+    vocab = Vocab()
+    model = SLR(rnn_hidden=512, vocab_size=vocab.size, temp_fusion_type=TEMP_FUSION_TYPE).to(DEVICE)
+
+    model.load_state_dict(torch.load(END2END_MODEL_PATH, map_location=DEVICE))
+    model.eval()
+    with torch.no_grad():
+        create_ctm_file_split(model, vocab, "test")
+        create_ctm_file_split(model, vocab, "dev")

@@ -5,6 +5,7 @@ import Levenshtein as Lev
 from torch.optim import Adam
 import sys
 import os
+import pickle
 
 sys.path.append(".." + os.sep)
 from utils import ProgressPrinter, Vocab
@@ -55,17 +56,12 @@ def save_model(model, phase, best_wer):
     print("Model Saved")
 
 
+# TODO fix this function to work for most cases
 def get_end2end_model(vocab, use_overfit=USE_OVERFIT):
     model = SLR(rnn_hidden=512, vocab_size=vocab.size, temp_fusion_type=TEMP_FUSION_TYPE).to(DEVICE)
     model_path = END2END_MODEL_PATH
-    if INP_FEAT and os.path.exists(END2END_MODEL_PATH):
-        model.load_state_dict(torch.load(END2END_MODEL_PATH, map_location=DEVICE))
-        print("Model Loaded")
-    elif INP_FEAT:
-        print("Model Initialized")
-        return model
 
-    if BUILD_MODEL_FROM_GR:
+    if BUILD_MODEL_FROM_GR and not INP_FEAT:
         if os.path.exists(GR_TF_MODEL_PATH):
             model.temp_fusion.load_state_dict(torch.load(GR_TF_MODEL_PATH, map_location=DEVICE))
             if BUILD_SEQ_FROM_GR:
@@ -80,11 +76,8 @@ def get_end2end_model(vocab, use_overfit=USE_OVERFIT):
     if use_overfit:
         model_path = phase_path(END2END_MODEL_PATH, "Train")
 
-    if os.path.exists(model_path):
+    if os.path.exists(model_path) and END2END_MODEL_LOAD:
         model.load_state_dict(torch.load(model_path, map_location=DEVICE))
-        print("Model Loaded")
-    elif os.path.exists(END2END_MODEL_PATH):
-        model.load_state_dict(torch.load(END2END_MODEL_PATH, map_location=DEVICE))
         print("Model Loaded")
     else:
         print("Model Initialized")
@@ -103,7 +96,9 @@ def train(model, vocab, datasets):
     loss_fn = nn.CTCLoss(zero_infinity=True)
 
     best_wer = get_wer_info()
+    curve = {"Train": [], "Val": []}
     try:
+
         for epoch in range(1, END2END_N_EPOCHS + 1):
             print("Epoch", epoch)
             for phase in ['Train', 'Val']:
@@ -161,6 +156,7 @@ def train(model, vocab, datasets):
                 gts = "".join([chr(x) for x in gts])
                 phase_wer = Lev.distance(hypes, gts) / len(gts) * 100
 
+                curve[phase].append(phase_wer)
                 phase_loss = np.mean(losses)
                 print(phase, "WER:", phase_wer, "Loss:", phase_loss)
 
@@ -173,6 +169,9 @@ def train(model, vocab, datasets):
     except KeyboardInterrupt:
         pass
     print("\nTraining complete:", "Best WER:", best_wer)
+
+    with open(os.path.join(VARS_DIR, "curve.pkl"), 'wb') as f:
+        pickle.dump(curve, f)
 
 
 if __name__ == "__main__":
