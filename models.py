@@ -122,9 +122,9 @@ class GR(nn.Module):
     def __init__(self, vocab_size, use_feat=INP_FEAT, temp_fusion_type=1):
         super(GR, self).__init__()
         if temp_fusion_type == 0:
-            self.temp_fusion = TempFusion2D(use_feat=use_feat)
+            self.temp_fusion = SpatioTemporalFusion(use_feat=use_feat)
         elif temp_fusion_type == 1:
-            self.temp_fusion = TempFusion3D()
+            self.temp_fusion = SpatioTemporalFusionComb()
         else:
             print("Incorrect temporal fusion type", temp_fusion_type)
             exit(0)
@@ -177,12 +177,12 @@ class SLR(nn.Module):
         # 1 => 3D temporal fusion 
         super(SLR, self).__init__()
         if temp_fusion_type == 0:
-            self.temp_fusion = TempFusion2D(use_feat=use_feat)
+            self.temp_fusion = SpatioTemporalFusion(use_feat=use_feat)
         elif temp_fusion_type == 1:
             if use_feat:
                 self.temp_fusion = nn.Identity()
             else:
-                self.temp_fusion = TempFusion3D()
+                self.temp_fusion = SpatioTemporalFusionComb()
         else:
             print("Incorrect temporal fusion type", temp_fusion_type)
             exit(0)
@@ -198,9 +198,9 @@ class SLR(nn.Module):
         return x
 
 
-class TempFusion3D(nn.Module):
+class SpatioTemporalFusionComb(nn.Module):
     def __init__(self):
-        super(TempFusion3D, self).__init__()
+        super(SpatioTemporalFusionComb, self).__init__()
         self.cnn_3d = models.video.r2plus1d_18(pretrained=True)
         self.avgpool = nn.AvgPool3d(kernel_size=(1, 7, 7))
 
@@ -214,9 +214,9 @@ class TempFusion3D(nn.Module):
         return x.reshape(-1, x.size(1), 1024)
 
 
-class TempFusion2D(nn.Module):
+class SpatioTemporalFusion(nn.Module):
     def __init__(self, use_feat):
-        super(TempFusion2D, self).__init__()
+        super(SpatioTemporalFusion, self).__init__()
         if use_feat:
             self.feat_m = nn.Identity()
         else:
@@ -244,7 +244,7 @@ class TempFusion2D(nn.Module):
 
 def weights_init(m):
     classname = m.__class__.__name__
-    if type(m) in [nn.Linear, nn.Conv2d, nn.Conv1d]:
+    if type(m) in [nn.Linear, nn.Conv2d, nn.Conv1d, nn.Conv3d]:
         torch.nn.init.xavier_uniform_(m.weight)
         m.bias.data.fill_(0.01)
     elif classname.find('BatchNorm') != -1:

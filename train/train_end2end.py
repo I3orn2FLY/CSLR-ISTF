@@ -56,31 +56,17 @@ def save_model(model, phase, best_wer):
     print("Model Saved")
 
 
-# TODO fix this function to work for most cases
-def get_end2end_model(vocab, use_overfit=USE_OVERFIT):
+def get_end2end_model(vocab):
     model = SLR(rnn_hidden=512, vocab_size=vocab.size, temp_fusion_type=TEMP_FUSION_TYPE).to(DEVICE)
-    model_path = END2END_MODEL_PATH
 
-    if BUILD_MODEL_FROM_GR and not INP_FEAT:
-        if os.path.exists(GR_TF_MODEL_PATH):
-            model.temp_fusion.load_state_dict(torch.load(GR_TF_MODEL_PATH, map_location=DEVICE))
-            if BUILD_SEQ_FROM_GR:
-                model.seq_model.load_state_dict(torch.load(GR_SEQ_MODEL_PATH, map_location=DEVICE))
-            print("Model Loaded and Build")
+    if END2END_MODEL_LOAD:
+        model_path = phase_path(END2END_MODEL_PATH, "Train") if USE_OVERFIT else END2END_MODEL_PATH
+
+        if os.path.exists(model_path):
+            model.load_state_dict(torch.load(model_path, map_location=DEVICE))
+            print("Model Loaded")
         else:
-            print("Cannot build model path doesn't exist")
-            exit(0)
-
-        return model
-
-    if use_overfit:
-        model_path = phase_path(END2END_MODEL_PATH, "Train")
-
-    if os.path.exists(model_path) and END2END_MODEL_LOAD:
-        model.load_state_dict(torch.load(model_path, map_location=DEVICE))
-        print("Model Loaded")
-    else:
-        print("Model Initialized")
+            print("Model Initialized")
 
     return model
 

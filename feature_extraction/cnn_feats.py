@@ -5,7 +5,7 @@ sys.path.append(".." + os.sep)
 
 from common import *
 from utils import *
-from models import ImgFeat, TempFusion3D
+from models import ImgFeat, SpatioTemporalFusionComb
 from config import *
 
 
@@ -16,7 +16,7 @@ def generate_cnn_features():
         preprocess = preprocess_2d
     elif IMG_FEAT_MODEL.startswith("resnet{2+1}d"):
         mode = "3D"
-        model = TempFusion3D().to(DEVICE)
+        model = SpatioTemporalFusionComb().to(DEVICE)
         if os.path.exists(GR_TF_MODEL_PATH):
             model.load_state_dict(torch.load(GR_TF_MODEL_PATH, map_location=DEVICE))
 

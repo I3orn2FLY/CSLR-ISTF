@@ -4,7 +4,6 @@ import numpy as np
 from numpy import random
 from torch.optim import Adam
 
-
 from utils import ProgressPrinter, Vocab
 from dataset import get_gr_datasets
 from models import SLR, GR
@@ -27,43 +26,23 @@ def get_best_loss():
     return best_loss
 
 
-def split_model(vocab):
-    if os.path.exists(GR_TF_MODEL_PATH) or not SPLIT_MODEL:
-        return
-
-    end2end_model = SLR(rnn_hidden=512, vocab_size=vocab.size, temp_fusion_type=1, use_feat=False).to(DEVICE)
-    if os.path.exists(GR_END2END_MODEL_PATH):
-        end2end_model.load_state_dict(torch.load(GR_END2END_MODEL_PATH, map_location=DEVICE))
-        print("Model Loaded")
-    else:
-        print("Model doesnt exist")
-        exit(0)
-
-    gr_dir = os.path.split(GR_TF_MODEL_PATH)[0]
-    if not os.path.exists(gr_dir):
-        os.makedirs(gr_dir)
-
-    temp_fusion = end2end_model.temp_fusion
-    seq_model = end2end_model.seq_model
-
-    torch.save(temp_fusion.state_dict(), GR_TF_MODEL_PATH)
-    torch.save(seq_model.state_dict(), GR_SEQ_MODEL_PATH)
-
-
 def get_GR_model(vocab):
     model = GR(vocab.size).to(DEVICE)
-    if os.path.exists(GR_TF_MODEL_PATH):
-        model.temp_fusion.load_state_dict(torch.load(GR_TF_MODEL_PATH, map_location=DEVICE))
-        print("Temp fusion model Loaded")
-    else:
-        print("Temp fusion model doesnt exist")
-        exit(0)
+    if USE_END2END_MODEL:
+        end2end_model = SLR(rnn_hidden=512, vocab_size=vocab.size, temp_fusion_type=1, use_feat=False).to(DEVICE)
+        if os.path.exists(GR_END2END_MODEL_PATH):
+            end2end_model.load_state_dict(torch.load(GR_END2END_MODEL_PATH, map_location=DEVICE))
+            print("Model Loaded")
 
-    if os.path.exists(GR_FC_PATH):
-        model.fc.load_state_dict(torch.load(GR_FC_PATH, map_location=DEVICE))
-        print("GR fc model Loaded")
+        model.temp_fusion.load_state_dict(end2end_model.temp_fusion.state_dict())
+
     else:
-        print("GR fc model doesnt exist")
+        if os.path.exists(GR_TF_MODEL_PATH):
+            model.temp_fusion.load_state_dict(torch.load(GR_TF_MODEL_PATH, map_location=DEVICE))
+            print("Temp fusion model Loaded")
+        else:
+            print("Temp fusion model doesnt exist")
+            exit(0)
 
     return model
 
@@ -77,10 +56,8 @@ def save_model(model, best_loss):
         f.write(str(best_loss) + "\n")
 
     temp_fusion = model.temp_fusion
-    fc_model = model.fc
 
     torch.save(temp_fusion.state_dict(), GR_TF_MODEL_PATH)
-    torch.save(fc_model.state_dict(), GR_FC_PATH)
     print("Model Saved")
 
 
@@ -160,7 +137,6 @@ def train(model, datasets):
 
 if __name__ == "__main__":
     vocab = Vocab()
-    split_model(vocab)
     model = get_GR_model(vocab)
     datasets = get_gr_datasets()
     train(model, datasets)
