@@ -5,11 +5,13 @@ sys.path.append(".." + os.sep)
 
 from common import *
 from utils import *
-from models import ImgFeat, SpatioTemporalFusionComb
+from models import ImgFeat, SpatioTemporalFusionComb, SLR
 from config import *
 
 
+# TODO add img_feat from end2end
 def generate_cnn_features():
+    vocab = Vocab()
     if IMG_FEAT_MODEL.startswith("densenet") or IMG_FEAT_MODEL.startswith("googlenet"):
         mode = "2D"
         model = ImgFeat().to(DEVICE)
@@ -17,8 +19,13 @@ def generate_cnn_features():
     elif IMG_FEAT_MODEL.startswith("resnet{2+1}d"):
         mode = "3D"
         model = SpatioTemporalFusionComb().to(DEVICE)
-        if os.path.exists(GR_TF_MODEL_PATH):
-            model.load_state_dict(torch.load(GR_TF_MODEL_PATH, map_location=DEVICE))
+        if USE_END2END_MODEL:
+            if os.path.exists(GR_END2END_MODEL_PATH):
+                end2end_model = SLR(512, vocab.size, False, 1).to(DEVICE)
+                end2end_model.load_state_dict(torch.load(GR_END2END_MODEL_PATH, map_location=DEVICE))
+                model.load_state_dict(end2end_model.temp_fusion.state_dict())
+        elif os.path.exists(GR_STF_MODEL_PATH):
+            model.load_state_dict(torch.load(GR_STF_MODEL_PATH, map_location=DEVICE))
 
         preprocess = preprocess_3d
     else:

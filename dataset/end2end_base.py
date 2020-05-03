@@ -82,7 +82,7 @@ class End2EndDataset():
         return IMG_FEAT_MODEL
 
     def _build_dataset(self):
-        dataset_dir = os.sep.join([VARS_DIR, "End2EndDataset", SOURCE, END2END_TRAIN_MODE, self._get_ffm()])
+        dataset_dir = os.sep.join([VARS_DIR, VARS_DIR, SOURCE, SRC_MODE, "End2EndDataset", self._get_ffm()])
 
         X_path = os.sep.join([dataset_dir, "X_" + self.split + ".pkl"])
         Y_path = os.sep.join([dataset_dir, "Y_" + self.split + ".pkl"])

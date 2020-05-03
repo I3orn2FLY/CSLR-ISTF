@@ -16,7 +16,7 @@ def get_end2end_datasets(vocab, include_test=False):
     args = {"vocab": vocab, "split": "train", "max_batch_size": END2END_BATCH_SIZE,
             "augment_temp": END2END_DATA_AUG_TEMP, "augment_frame": END2END_DATA_AUG_FRAME}
 
-    if INP_FEAT:
+    if USE_FEAT:
         if IMG_FEAT_MODEL.startswith("pose"):
             dataset_class = End2EndPoseDataset
         elif IMG_FEAT_MODEL.startswith("densenet121") or IMG_FEAT_MODEL.startswith("googlenet"):

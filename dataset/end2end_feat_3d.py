@@ -14,7 +14,7 @@ from utils import Vocab
 
 class End2EndTempFusionDataset(End2EndDataset):
     def __init__(self, vocab, split, max_batch_size, augment_frame=True, augment_temp=True):
-        if not IMG_FEAT_MODEL.startswith("resnet{2+1}d") or TEMP_FUSION_TYPE != 1 or (not INP_FEAT):
+        if not IMG_FEAT_MODEL.startswith("resnet{2+1}d") or TEMP_FUSION_TYPE != 1 or (not USE_FEAT):
             print("Incorrect feat model:", IMG_FEAT_MODEL, TEMP_FUSION_TYPE)
             exit(0)
         super(End2EndTempFusionDataset, self).__init__(vocab, split, max_batch_size, augment_frame, augment_temp)

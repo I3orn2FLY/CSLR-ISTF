@@ -119,7 +119,7 @@ class VGG_S_3D(nn.Module):
 
 
 class GR(nn.Module):
-    def __init__(self, vocab_size, use_feat=INP_FEAT, temp_fusion_type=1):
+    def __init__(self, vocab_size, use_feat=USE_FEAT, temp_fusion_type=1):
         super(GR, self).__init__()
         if temp_fusion_type == 0:
             self.temp_fusion = SpatioTemporalFusion(use_feat=use_feat)
@@ -171,7 +171,7 @@ class BiLSTM(nn.Module):
 
 class SLR(nn.Module):
 
-    def __init__(self, rnn_hidden, vocab_size, use_feat=INP_FEAT, temp_fusion_type=0):
+    def __init__(self, rnn_hidden, vocab_size, use_feat=USE_FEAT, temp_fusion_type=0):
         # temp_fusion_type = >
         # 0 => 2D temporal fusion
         # 1 => 3D temporal fusion 

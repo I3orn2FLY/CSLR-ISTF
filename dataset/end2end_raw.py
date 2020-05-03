@@ -42,7 +42,7 @@ def get_video_worker(args):
 class End2EndRawDataset(End2EndDataset):
     def __init__(self, vocab, split, max_batch_size, augment_frame=True, augment_temp=True):
         # maybe implement this
-        if INP_FEAT:
+        if USE_FEAT:
             print("Error, using Features")
             exit(0)
         super(End2EndRawDataset, self).__init__(vocab, split, max_batch_size, augment_frame, augment_temp)
@@ -51,7 +51,7 @@ class End2EndRawDataset(End2EndDataset):
         self.std = np.array([0.22803, 0.22145, 0.216989], dtype=np.float32)
 
     def _get_ffm(self):
-        return "raw_videos"
+        return "videos"
 
     def _show_progress(self):
         return SHOW_PROGRESS

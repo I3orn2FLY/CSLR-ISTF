@@ -36,7 +36,7 @@ def get_wer_info(phases=["Train", "Val"]):
 def phase_path(name, phase):
     ext = os.path.splitext(name)[1]
     if phase == "Train":
-        return name.replace(ext, "_Train" + ext)
+        return name.replace("Val" + ext, "Train" + ext)
     return name
 
 
@@ -73,7 +73,7 @@ def get_end2end_model(vocab):
 
 def train(model, vocab, datasets):
     print("END2END model training...")
-    print("Mode:", END2END_TRAIN_MODE)
+    print("Mode:", SRC_MODE)
     print("Features:", IMG_FEAT_MODEL)
     print("Save Model path:", END2END_MODEL_PATH)
     print("WER path:", END2END_WER_PATH)
@@ -100,7 +100,7 @@ def train(model, vocab, datasets):
                 gts = []
 
                 with torch.set_grad_enabled(phase == "Train"):
-                    pp = ProgressPrinter(n_batches, 25 if INP_FEAT else 1)
+                    pp = ProgressPrinter(n_batches, 25 if USE_FEAT else 1)
                     for i in range(n_batches):
                         optimizer.zero_grad()
                         X_batch, Y_batch, Y_lens = dataset.get_batch(i)

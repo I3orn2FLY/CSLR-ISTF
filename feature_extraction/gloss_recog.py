@@ -80,7 +80,7 @@ def generate_gloss_dataset():
             if len(images) < 4:
                 continue
 
-            if INP_FEAT:
+            if USE_FEAT:
                 if SOURCE == "PH":
                     feat_path = os.sep.join([VIDEO_FEAT_DIR, "train", row.folder.replace("/1/*.png", ".pt")])
                 elif SOURCE == "KRSL":

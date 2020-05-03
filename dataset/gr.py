@@ -23,7 +23,7 @@ class GR_dataset():
 
     def build_dataset(self, split):
 
-        prefix_dir = os.sep.join([VARS_DIR, "GR_Dataset", SOURCE, END2END_TRAIN_MODE])
+        prefix_dir = os.sep.join([VARS_DIR, "GR_Dataset", SOURCE, SRC_MODE])
 
         X_path = os.sep.join([prefix_dir, "X_" + split + ".pkl"])
         Y_path = os.sep.join([prefix_dir, "Y_" + split + ".pkl"])

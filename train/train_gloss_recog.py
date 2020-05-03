@@ -37,8 +37,8 @@ def get_GR_model(vocab):
         model.temp_fusion.load_state_dict(end2end_model.temp_fusion.state_dict())
 
     else:
-        if os.path.exists(GR_TF_MODEL_PATH):
-            model.temp_fusion.load_state_dict(torch.load(GR_TF_MODEL_PATH, map_location=DEVICE))
+        if os.path.exists(GR_STF_MODEL_PATH):
+            model.temp_fusion.load_state_dict(torch.load(GR_STF_MODEL_PATH, map_location=DEVICE))
             print("Temp fusion model Loaded")
         else:
             print("Temp fusion model doesnt exist")
@@ -57,18 +57,18 @@ def save_model(model, best_loss):
 
     temp_fusion = model.temp_fusion
 
-    torch.save(temp_fusion.state_dict(), GR_TF_MODEL_PATH)
+    torch.save(temp_fusion.state_dict(), GR_STF_MODEL_PATH)
     print("Model Saved")
 
 
 def train(model, datasets):
     print("GR model training...")
-    print("Mode:", END2END_TRAIN_MODE)
+    print("Mode:", SRC_MODE)
     print("Features:", IMG_FEAT_MODEL)
     best_loss = get_best_loss()
     optimizer = Adam(model.parameters(), lr=GR_LR)
 
-    if IGNORE_INDEX:
+    if IGNORE_BLANK:
         loss_fn = nn.CrossEntropyLoss()
     else:
 
