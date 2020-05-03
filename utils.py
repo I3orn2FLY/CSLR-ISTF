@@ -27,7 +27,10 @@ class ProgressPrinter():
         minutes = time_left % 3600 // 60
         seconds = time_left % 60
 
-        print("\r" + something + " Progress: %.2f" % (cur_idx * 100 / self.L) + "% "
+        if something:
+            something = something + " "
+
+        print("\r" + something + "Progress: %.2f" % (cur_idx * 100 / self.L) + "% "
               + str(hours) + " hours "
               + str(minutes) + " minutes "
               + str(seconds) + " seconds left", end=" ")
