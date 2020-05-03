@@ -100,7 +100,7 @@ def train(model, vocab, datasets):
                 gts = []
 
                 with torch.set_grad_enabled(phase == "Train"):
-                    pp = ProgressPrinter(n_batches, 25)
+                    pp = ProgressPrinter(n_batches, 25 if INP_FEAT else 1)
                     for i in range(n_batches):
                         optimizer.zero_grad()
                         X_batch, Y_batch, Y_lens = dataset.get_batch(i)
