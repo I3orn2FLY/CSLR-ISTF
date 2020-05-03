@@ -7,7 +7,7 @@ import os
 sys.path.append(".." + os.sep)
 
 from config import *
-from utils import get_split_df
+from utils import get_split_df, ProgressPrinter
 
 
 def down_sample(video, n):
@@ -75,14 +75,18 @@ class End2EndDataset():
     def _get_feat(self, row, glosses=None):
         raise NotImplementedError
 
+    def _show_progress(self):
+        return False
+
+    def _get_ffm(self):
+        return IMG_FEAT_MODEL
+
     def _build_dataset(self):
-        ffm = IMG_FEAT_MODEL
+        dataset_dir = os.sep.join([VARS_DIR, "End2EndDataset", SOURCE, END2END_TRAIN_MODE, self._get_ffm()])
 
-        prefix_dir = os.sep.join([VARS_DIR, "End2EndDataset", SOURCE, END2END_TRAIN_MODE, ffm])
-
-        X_path = os.sep.join([prefix_dir, "X_" + self.split + ".pkl"])
-        Y_path = os.sep.join([prefix_dir, "Y_" + self.split + ".pkl"])
-        X_lens_path = os.sep.join([prefix_dir, "X_lens_" + self.split + ".pkl"])
+        X_path = os.sep.join([dataset_dir, "X_" + self.split + ".pkl"])
+        Y_path = os.sep.join([dataset_dir, "Y_" + self.split + ".pkl"])
+        X_lens_path = os.sep.join([dataset_dir, "X_lens_" + self.split + ".pkl"])
 
         if os.path.exists(X_path) and os.path.exists(Y_path) and os.path.exists(X_lens_path):
             with open(X_path, 'rb') as f:
@@ -93,12 +97,16 @@ class End2EndDataset():
 
             with open(X_lens_path, 'rb') as f:
                 self.X_lens = pickle.load(f)
+
+            print(self.split[0].upper() + self.split[1:], "dataset loaded")
         else:
             print("Building", self.split, "dataset")
             df = get_split_df(self.split)
             self.X = []
             self.Y = []
             self.X_lens = []
+
+            pp = ProgressPrinter(df.shape[0], 5)
             for idx in range(df.shape[0]):
                 row = df.iloc[idx]
                 glosses = self.vocab.encode(row.annotation)
@@ -110,8 +118,14 @@ class End2EndDataset():
                 self.Y.append(glosses)
                 self.X_lens.append(feat_len)
 
-            if not os.path.exists(prefix_dir):
-                os.makedirs(prefix_dir)
+                if self._show_progress():
+                    pp.show(idx)
+
+            if self._show_progress():
+                pp.end()
+
+            if not os.path.exists(dataset_dir):
+                os.makedirs(dataset_dir)
 
             with open(X_path, 'wb') as f:
                 pickle.dump(self.X, f)

@@ -28,13 +28,6 @@ def get_end2end_datasets(vocab, include_test=False):
             exit(0)
     else:
         dataset_class = End2EndRawDataset
-        if TEMP_FUSION_TYPE == 0:
-            args["img_size"] = IMG_SIZE_2D
-        elif TEMP_FUSION_TYPE == 1:
-            args["img_size"] = IMG_SIZE_3D
-        else:
-            print("Incorrect temp fusion type", TEMP_FUSION_TYPE)
-            exit(0)
 
     tr_dataset = dataset_class(**args)
     args["split"] = "dev"
