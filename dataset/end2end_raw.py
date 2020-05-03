@@ -29,7 +29,7 @@ def get_video_worker(args):
             img = preprocess_3d(img)
         video.append(img)
 
-    video = np.stack(video)
+    video = np.stack(video).astype(np.float32)
 
     if TEMP_FUSION_TYPE == 0:
         video = video.transpose([0, 3, 1, 2])
