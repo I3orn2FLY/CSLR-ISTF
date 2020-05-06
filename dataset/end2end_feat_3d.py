@@ -1,23 +1,18 @@
-import sys
-import os
 import torch
 
-from end2end_base import End2EndDataset, random_skip, down_sample
+from dataset.end2end_base import End2EndDataset, random_skip, down_sample
 
-sys.path.append(".." + os.sep)
 
 from config import *
 from utils import Vocab
 
 
-# TODO test this
-
-class End2EndTempFusionDataset(End2EndDataset):
+class End2EndSTFDataset(End2EndDataset):
     def __init__(self, vocab, split, max_batch_size, augment_frame=True, augment_temp=True):
         if not IMG_FEAT_MODEL.startswith("resnet{2+1}d") or TEMP_FUSION_TYPE != 1 or (not USE_FEAT):
             print("Incorrect feat model:", IMG_FEAT_MODEL, TEMP_FUSION_TYPE)
             exit(0)
-        super(End2EndTempFusionDataset, self).__init__(vocab, split, max_batch_size, augment_frame, augment_temp)
+        super(End2EndSTFDataset, self).__init__(vocab, split, max_batch_size, augment_frame, augment_temp)
 
     def _get_feat(self, row, glosses=None):
         if SOURCE == "PH":
@@ -59,7 +54,7 @@ class End2EndTempFusionDataset(End2EndDataset):
 
 if __name__ == "__main__":
     vocab = Vocab()
-    dataset = End2EndTempFusionDataset(vocab, "train", 32, True, True)
+    dataset = End2EndSTFDataset(vocab, "train", 32, True, True)
 
     dataset.start_epoch()
 

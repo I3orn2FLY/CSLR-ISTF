@@ -1,15 +1,11 @@
-import sys
-import os
 import torch
 import numpy as np
 
-from end2end_base import End2EndDataset, random_skip, down_sample
-
-sys.path.append(".." + os.sep)
+from dataset.end2end_base import End2EndDataset, random_skip, down_sample
+from utils import Vocab
 
 from config import *
 
-# TODO test this
 
 def process_video_pose(video_pose, augment_frame=True):
     video_pose = video_pose.reshape(-1, 137, 3)
@@ -41,8 +37,8 @@ def process_video_pose(video_pose, augment_frame=True):
 
 class End2EndPoseDataset(End2EndDataset):
     def __init__(self, vocab, split, max_batch_size, augment_frame=True, augment_temp=True):
-        if not IMG_FEAT_MODEL.startswith("pose"):
-            print("Incorrect feat model:", IMG_FEAT_MODEL)
+        if (not IMG_FEAT_MODEL.startswith("pose")) or SRC_MODE == "HAND" or (not USE_FEAT):
+            print("Incorrect params => ", IMG_FEAT_MODEL, SRC_MODE, "USE_FEAT:", USE_FEAT)
             exit(0)
         super(End2EndPoseDataset, self).__init__(vocab, split, max_batch_size, augment_frame, augment_temp)
 
@@ -80,3 +76,16 @@ class End2EndPoseDataset(End2EndDataset):
         X_batch = torch.from_numpy(np.stack(X_batch).astype(np.float32)).unsqueeze(1)
 
         return X_batch
+
+
+if __name__ == "__main__":
+    vocab = Vocab()
+    dataset = End2EndPoseDataset(vocab, "train", 32, True, True)
+
+    dataset.start_epoch()
+
+    X_batch, Y_batch, Y_lens = dataset.get_batch(0)
+
+    print(X_batch.size())
+    print(Y_batch.size())
+    print(Y_lens.size())

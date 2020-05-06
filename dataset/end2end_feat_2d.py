@@ -1,16 +1,13 @@
 import sys
 import os
 import torch
-import numpy as np
 
-from end2end_base import End2EndDataset, random_skip, down_sample
+from dataset.end2end_base import End2EndDataset, random_skip, down_sample
 
 sys.path.append(".." + os.sep)
 from utils import Vocab
 from config import *
 
-
-# TODO test this
 
 class End2EndImgFeatDataset(End2EndDataset):
     def __init__(self, vocab, split, max_batch_size, augment_frame=True, augment_temp=True):

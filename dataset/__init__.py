@@ -3,7 +3,7 @@ import os
 from dataset.gr import GR_dataset
 
 from dataset.end2end_pose import End2EndPoseDataset
-from dataset.end2end_feat_3d import End2EndTempFusionDataset
+from dataset.end2end_feat_3d import End2EndSTFDataset
 from dataset.end2end_raw import End2EndRawDataset
 from dataset.end2end_feat_2d import End2EndImgFeatDataset
 
@@ -22,7 +22,7 @@ def get_end2end_datasets(vocab, include_test=False):
         elif IMG_FEAT_MODEL.startswith("densenet121") or IMG_FEAT_MODEL.startswith("googlenet"):
             dataset_class = End2EndImgFeatDataset
         elif IMG_FEAT_MODEL.startswith("resnet{2+1}d"):
-            dataset_class = End2EndTempFusionDataset
+            dataset_class = End2EndSTFDataset
         else:
             print("Not implemented", IMG_FEAT_MODEL, TEMP_FUSION_TYPE)
             exit(0)
