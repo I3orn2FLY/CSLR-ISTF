@@ -1,15 +1,9 @@
-import os
-import sys
-
-sys.path.append(".." + os.sep)
-
 from common import *
 from utils import *
 from models import ImgFeat, SpatioTemporalFusionComb, SLR
 from config import *
 
 
-# TODO add img_feat from end2end
 def generate_cnn_features():
     vocab = Vocab()
     if IMG_FEAT_MODEL.startswith("densenet") or IMG_FEAT_MODEL.startswith("googlenet"):

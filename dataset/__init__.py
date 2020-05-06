@@ -1,11 +1,11 @@
 import sys
 import os
-from gr import GR_dataset
+from dataset.gr import GR_dataset
 
-from end2end_pose import End2EndPoseDataset
-from end2end_feat_3d import End2EndTempFusionDataset
-from end2end_raw import End2EndRawDataset
-from end2end_feat_2d import End2EndImgFeatDataset
+from dataset.end2end_pose import End2EndPoseDataset
+from dataset.end2end_feat_3d import End2EndTempFusionDataset
+from dataset.end2end_raw import End2EndRawDataset
+from dataset.end2end_feat_2d import End2EndImgFeatDataset
 
 sys.path.append(".." + os.sep)
 

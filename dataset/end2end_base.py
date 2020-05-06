@@ -1,10 +1,7 @@
 import pickle
 import torch
 import numpy as np
-import sys
-import os
 
-sys.path.append(".." + os.sep)
 
 from config import *
 from utils import get_split_df, ProgressPrinter
@@ -82,11 +79,13 @@ class End2EndDataset():
         return IMG_FEAT_MODEL
 
     def _build_dataset(self):
-        dataset_dir = os.sep.join([VARS_DIR, VARS_DIR, SOURCE, SRC_MODE, "End2EndDataset", self._get_ffm()])
+        dataset_dir = os.sep.join([VARS_DIR, SOURCE, SRC_MODE, "End2EndDataset", self._get_ffm()])
 
         X_path = os.sep.join([dataset_dir, "X_" + self.split + ".pkl"])
         Y_path = os.sep.join([dataset_dir, "Y_" + self.split + ".pkl"])
         X_lens_path = os.sep.join([dataset_dir, "X_lens_" + self.split + ".pkl"])
+
+        print(dataset_dir)
 
         if os.path.exists(X_path) and os.path.exists(Y_path) and os.path.exists(X_lens_path):
             with open(X_path, 'rb') as f:

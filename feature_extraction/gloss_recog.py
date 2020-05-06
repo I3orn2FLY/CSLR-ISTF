@@ -1,8 +1,3 @@
-import sys
-import os
-
-sys.path.append(".." + os.sep)
-
 from utils import *
 from models import SLR
 from common import *

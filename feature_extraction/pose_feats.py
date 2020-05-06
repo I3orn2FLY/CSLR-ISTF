@@ -1,9 +1,7 @@
 import torch
 import sys
 import numpy as np
-import os
 
-sys.path.append(".." + os.sep)
 from utils import *
 from config import *
 

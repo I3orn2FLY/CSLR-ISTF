@@ -2,12 +2,9 @@ import torch
 import torch.nn as nn
 import numpy as np
 import Levenshtein as Lev
-from torch.optim import Adam
-import sys
-import os
 import pickle
+from torch.optim import Adam
 
-sys.path.append(".." + os.sep)
 from utils import ProgressPrinter, Vocab
 from common import predict_glosses
 from dataset import get_end2end_datasets
@@ -165,5 +162,4 @@ if __name__ == "__main__":
 
     model = get_end2end_model(vocab)
     datasets = get_end2end_datasets(vocab)
-
     train(model, vocab, datasets)
