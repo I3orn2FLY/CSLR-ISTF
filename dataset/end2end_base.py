@@ -80,7 +80,7 @@ class End2EndDataset():
 
     def _build_dataset(self):
 
-        dataset_dir = os.sep.join([ENDEND_DATASETS_DIR, self._get_ffm()])
+        dataset_dir = os.sep.join([END2END_DATASETS_DIR, self._get_ffm()])
 
         X_path = os.sep.join([dataset_dir, "X_" + self.split + ".pkl"])
         Y_path = os.sep.join([dataset_dir, "Y_" + self.split + ".pkl"])
