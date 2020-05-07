@@ -36,10 +36,9 @@ def get_gloss_paths(images, pad_image, gloss_idx, stride, save=True):
     return gloss_paths
 
 
-def generate_gloss_dataset():
-    vocab = Vocab()
-    if not IMG_FEAT_MODEL.startswith("resnet{2+1}d") or TEMP_FUSION_TYPE != 1:
-        print("Incorrect feature extraction model:", IMG_FEAT_MODEL, TEMP_FUSION_TYPE)
+def generate_gloss_dataset(vocab):
+    if not IMG_FEAT_MODEL.startswith("resnet{2+1}d") or TEMP_FUSION_TYPE != 1 or USE_FEAT:
+        print("Incorrect feature extraction model:", IMG_FEAT_MODEL, TEMP_FUSION_TYPE, USE_FEAT)
         exit(0)
 
     model = SLR(rnn_hidden=512, vocab_size=vocab.size, temp_fusion_type=1).to(DEVICE)
@@ -50,6 +49,10 @@ def generate_gloss_dataset():
     else:
         print("Model doesnt exist")
         exit(0)
+
+    if not os.path.exists(os.path.split(GR_STF_MODEL_PATH)[0]):
+        os.makedirs(os.path.split(GR_STF_MODEL_PATH)[0])
+    torch.save(model.temp_fusion.state_dict(), GR_STF_MODEL_PATH)
 
     model.eval()
 
@@ -153,14 +156,14 @@ class GR_dataset():
             return
 
         print("Building GR", split, "dataset")
-        df = pd.read_csv(os.path.join(ANNO_DIR, "gloss_" + split + ".csv"))
+        df = pd.read_csv(os.path.join(GR_ANNO_DIR, "gloss_" + split + ".csv"))
         self.X = []
         self.X_lens = []
         self.Y = []
         pp = ProgressPrinter(df.shape[0], 25)
         for i in range(df.shape[0]):
             row = df.iloc[i]
-            video_dir = os.path.join(GLOSS_DATA_DIR, row.folder)
+            video_dir = os.path.join(GR_VIDEOS_DIR, row.folder)
             image_files = list(glob.glob(video_dir))
             image_files.sort()
 
@@ -250,6 +253,7 @@ class GR_dataset():
 
 if __name__ == "__main__":
     vocab = Vocab()
+    generate_gloss_dataset(vocab)
     gr_train = GR_dataset("train", 64)
 
     gr_train.start_epoch()
