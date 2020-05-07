@@ -53,10 +53,15 @@ def save_model(model, phase, best_wer):
     print("Model Saved")
 
 
-def get_end2end_model(vocab):
+def get_end2end_model(vocab, use_gr=USE_TUNED_GR):
     model = SLR(rnn_hidden=512, vocab_size=vocab.size, temp_fusion_type=TEMP_FUSION_TYPE).to(DEVICE)
 
-    if END2END_MODEL_LOAD:
+    if not END2END_MODEL_LOAD: return model
+
+    if use_gr:
+        model.temp_fusion.load_state_dict(torch.load(GR_STF_MODEL_PATH, map_location=DEVICE))
+    else:
+
         model_path = phase_path(END2END_MODEL_PATH, "Train") if USE_OVERFIT else END2END_MODEL_PATH
 
         if os.path.exists(model_path):
