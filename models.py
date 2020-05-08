@@ -1,141 +1,29 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torchvision.models as models
-import PIL
 from config import *
 
 
 class ImgFeat(nn.Module):
     def __init__(self):
         super(ImgFeat, self).__init__()
-        if IMG_FEAT_MODEL.startswith("densenet121"):
+        if STF_MODEL.startswith("densenet121"):
             self.feat_m = models.densenet121(pretrained=True)
             self.feat_m.classifier = nn.Identity()
-        elif IMG_FEAT_MODEL.startswith("googlenet"):
+        elif STF_MODEL.startswith("googlenet"):
             self.feat_m = models.googlenet(pretrained=True)
             self.feat_m.fc = nn.Identity()
-        elif IMG_FEAT_MODEL.startswith("resnet18"):
+        elif STF_MODEL.startswith("resnet18"):
             self.feat_m = models.resnet18(pretrained=True)
             self.feat_m.fc = nn.Identity()
-        elif IMG_FEAT_MODEL.startswith("vgg-s"):
-            self.feat_m = VGG_S
+        elif STF_MODEL.startswith("pose"):
+            self.feat_m = nn.Identity()
         else:
-            print("Incorrect FFM", IMG_FEAT_MODEL)
+            print("Incorrect FFM", STF_MODEL)
             exit(0)
 
     def forward(self, x):
         return self.feat_m(x)
-
-
-class VGG_S(nn.Module):
-    def __init__(self):
-        super(VGG_S, self).__init__()
-        self.conv1 = nn.Conv2d(3, 96, 7, 2)
-        self.pool1 = nn.MaxPool2d(kernel_size=3, stride=3)
-        self.lrn1 = nn.LocalResponseNorm(1)
-
-        self.conv2 = nn.Conv2d(96, 256, 5, 1, 1)
-        self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
-
-        self.conv3 = nn.Conv2d(256, 512, 3, 1, 1)
-
-        self.conv4 = nn.Conv2d(512, 512, 3, 1, 1)
-
-        self.conv5 = nn.Conv2d(512, 512, 3, 1, 1)
-        self.pool5 = nn.MaxPool2d(kernel_size=3, stride=3)
-
-        self.fc6 = nn.Linear(512 * 2 * 2, 1024)
-        self.dropout1 = nn.Dropout()
-
-    def forward(self, x):
-        x = self.conv1(x)
-        x = F.relu(x)
-        x = self.pool1(x)
-        x = self.lrn1(x)
-
-        x = self.conv2(x)
-        x = F.relu(x)
-        x = self.pool2(x)
-
-        x = self.conv3(x)
-        x = F.relu(x)
-
-        x = self.conv4(x)
-        x = F.relu(x)
-
-        x = self.conv5(x)
-        x = F.relu(x)
-        x = self.pool5(x)
-
-        x = x.view(-1, 512 * 2 * 2)
-
-        x = self.fc6(x)
-        x = F.relu(x)
-
-        return x
-
-
-class VGG_S_3D(nn.Module):
-    def __init__(self):
-        super(VGG_S_3D, self).__init__()
-        self.conv1 = nn.Conv3d(3, 96, (1, 7, 7), (1, 2, 2))
-        self.pool1 = nn.MaxPool3d(kernel_size=(1, 3, 3), stride=(1, 3, 3))
-        self.lrn1 = nn.LocalResponseNorm(1)
-
-        self.conv2 = nn.Conv3d(96, 256, (1, 5, 5), (1, 1, 1), (0, 1, 1))
-        self.pool2 = nn.MaxPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2))
-
-        self.conv3 = nn.Conv3d(256, 512, (1, 3, 3), (1, 1, 1), (0, 1, 1))
-        self.pool3 = nn.MaxPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2))
-
-        self.conv4 = nn.Conv3d(512, 512, (1, 3, 3), (1, 1, 1), (0, 1, 1))
-
-        self.conv5 = nn.Conv3d(512, 512, (1, 3, 3), (1, 1, 1), (0, 1, 1))
-        self.pool5 = nn.MaxPool3d(kernel_size=(1, 3, 3), stride=(1, 3, 3))
-
-    def forward(self, x):
-        x = self.conv1(x)
-        x = F.relu(x)
-        x = self.pool1(x)
-        x = self.lrn1(x)
-
-        x = self.conv2(x)
-        x = F.relu(x)
-        x = self.pool2(x)
-
-        x = self.conv3(x)
-        x = F.relu(x)
-        x = self.pool3(x)
-
-        x = self.conv4(x)
-        x = F.relu(x)
-
-        x = self.conv5(x)
-        x = F.relu(x)
-        x = self.pool5(x)
-
-        return x
-
-
-class GR(nn.Module):
-    def __init__(self, vocab_size, use_feat=USE_FEAT, temp_fusion_type=1):
-        super(GR, self).__init__()
-        if temp_fusion_type == 0:
-            self.temp_fusion = SpatioTemporalFusion(use_feat=use_feat)
-        elif temp_fusion_type == 1:
-            self.temp_fusion = SpatioTemporalFusionComb()
-        else:
-            print("Incorrect temporal fusion type", temp_fusion_type)
-            exit(0)
-
-        self.fc = nn.Linear(IMG_FEAT_SIZE * 2, vocab_size)
-
-    def forward(self, x):
-        x = self.temp_fusion(x)
-        x = x.view(-1, 2 * IMG_FEAT_SIZE)
-        x = self.fc(x)
-        return x
 
 
 class BiLSTM(nn.Module):
@@ -171,36 +59,57 @@ class BiLSTM(nn.Module):
 
 class SLR(nn.Module):
 
-    def __init__(self, rnn_hidden, vocab_size, use_feat=USE_FEAT, temp_fusion_type=0):
+    def __init__(self, rnn_hidden, vocab_size, use_feat=USE_STF_FEAT, stf_type=0):
         # temp_fusion_type = >
         # 0 => 2D temporal fusion
         # 1 => 3D temporal fusion 
         super(SLR, self).__init__()
-        if temp_fusion_type == 0:
-            self.temp_fusion = SpatioTemporalFusion(use_feat=use_feat)
-        elif temp_fusion_type == 1:
-            if use_feat:
-                self.temp_fusion = nn.Identity()
+        if use_feat:
+            self.stf = nn.Identity()
+        else:
+            if stf_type == 0:
+                self.stf = STF_2D(use_feat=use_feat)
+            elif stf_type == 1:
+
+                self.stf = STF_2Plus1D()
             else:
-                self.temp_fusion = SpatioTemporalFusionComb()
+                print("Incorrect STF type", stf_type)
+                exit(0)
+
+        self.seq2seq = BiLSTM(rnn_hidden, vocab_size)
+
+    def forward(self, x, x_lengths=None):
+        # (batch_size, max_seq_length // 4, 1024)
+        x = self.stf(x)
+        x = x.permute(1, 0, 2)
+        # (max_seq_length // 4, batch_size, 1024)
+        x = self.seq2seq(x, x_lengths)
+        return x
+
+
+class GR(nn.Module):
+    def __init__(self, vocab_size, use_feat=USE_STF_FEAT, temp_fusion_type=1):
+        super(GR, self).__init__()
+        if temp_fusion_type == 0:
+            self.stf = STF_2D(use_feat=use_feat)
+        elif temp_fusion_type == 1:
+            self.stf = STF_2Plus1D()
         else:
             print("Incorrect temporal fusion type", temp_fusion_type)
             exit(0)
 
-        self.seq_model = BiLSTM(rnn_hidden, vocab_size)
+        self.fc = nn.Linear(IMG_FEAT_SIZE * 2, vocab_size)
 
-    def forward(self, x, x_lengths=None):
-        # (batch_size, max_seq_length // 4, 1024)
-        x = self.temp_fusion(x)
-        x = x.permute(1, 0, 2)
-        # (max_seq_length // 4, batch_size, 1024)
-        x = self.seq_model(x, x_lengths)
+    def forward(self, x):
+        x = self.stf(x)
+        x = x.view(-1, 2 * IMG_FEAT_SIZE)
+        x = self.fc(x)
         return x
 
 
-class SpatioTemporalFusionComb(nn.Module):
+class STF_2Plus1D(nn.Module):
     def __init__(self):
-        super(SpatioTemporalFusionComb, self).__init__()
+        super(STF_2Plus1D, self).__init__()
         self.cnn_3d = models.video.r2plus1d_18(pretrained=True)
         self.avgpool = nn.AvgPool3d(kernel_size=(1, 7, 7))
 
@@ -214,9 +123,9 @@ class SpatioTemporalFusionComb(nn.Module):
         return x.reshape(-1, x.size(1), 1024)
 
 
-class SpatioTemporalFusion(nn.Module):
+class STF_2D(nn.Module):
     def __init__(self, use_feat):
-        super(SpatioTemporalFusion, self).__init__()
+        super(STF_2D, self).__init__()
         if use_feat:
             self.feat_m = nn.Identity()
         else:
@@ -242,6 +151,38 @@ class SpatioTemporalFusion(nn.Module):
         return x.permute(1, 0, 2)
 
 
+# maybe add use overfit
+def get_end2end_model(vocab, load, stf_type, use_feat):
+    model = SLR(rnn_hidden=512, vocab_size=vocab.size, stf_type=stf_type).to(DEVICE)
+
+    fully_loaded = use_feat
+    if os.path.exists(STF_MODEL_PATH) and load and not use_feat:
+        model.stf.load_state_dict(torch.load(STF_MODEL_PATH, map_location=DEVICE))
+        print("STF model Loaded")
+        fully_loaded = True
+
+    if os.path.exists(SEQ2SEQ_MODEL_PATH) and load:
+        model.seq2seq.load_state_dict(torch.load(SEQ2SEQ_MODEL_PATH, map_location=DEVICE))
+        print("Seq2Seq model Loaded")
+    else:
+        fully_loaded = False
+
+    return model, fully_loaded
+
+
+def get_GR_model(vocab):
+    model = GR(vocab.size).to(DEVICE)
+
+    if os.path.exists(STF_MODEL_PATH):
+        model.stf.load_state_dict(torch.load(STF_MODEL_PATH, map_location=DEVICE))
+        print("Temp fusion model Loaded")
+    else:
+        print("Temp fusion model doesnt exist")
+        exit(0)
+
+    return model
+
+
 def weights_init(m):
     classname = m.__class__.__name__
     if type(m) in [nn.Linear, nn.Conv2d, nn.Conv1d, nn.Conv3d]:
@@ -254,7 +195,7 @@ def weights_init(m):
 
 if __name__ == "__main__":
     use_feat = False
-    model = SLR(rnn_hidden=512, vocab_size=300, temp_fusion_type=1, use_feat=use_feat).to(DEVICE)
+    model = SLR(rnn_hidden=512, vocab_size=300, stf_type=1, use_feat=use_feat).to(DEVICE)
     model.eval()
     batch_size = 8
     T = 12

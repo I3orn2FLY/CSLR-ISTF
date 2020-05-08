@@ -2,7 +2,6 @@ import pickle
 import torch
 import numpy as np
 
-
 from config import *
 from utils import get_split_df, ProgressPrinter
 
@@ -76,7 +75,7 @@ class End2EndDataset():
         return False
 
     def _get_ffm(self):
-        return IMG_FEAT_MODEL
+        return STF_MODEL + "_" + str(IMG_FEAT_SIZE)
 
     def _build_dataset(self):
 

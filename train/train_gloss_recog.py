@@ -6,12 +6,10 @@ from torch.optim import Adam
 
 from utils import ProgressPrinter, Vocab
 from dataset import get_gr_datasets
-from models import SLR, GR
+from models import get_GR_model
 from config import *
 
 random.seed(0)
-
-torch.backends.cudnn.deterministic = True
 
 
 def get_best_loss():
@@ -26,27 +24,6 @@ def get_best_loss():
     return best_loss
 
 
-def get_GR_model(vocab):
-    model = GR(vocab.size).to(DEVICE)
-    if USE_END2END_MODEL:
-        end2end_model = SLR(rnn_hidden=512, vocab_size=vocab.size, temp_fusion_type=1, use_feat=False).to(DEVICE)
-        if os.path.exists(GR_END2END_MODEL_PATH):
-            end2end_model.load_state_dict(torch.load(GR_END2END_MODEL_PATH, map_location=DEVICE))
-            print("Model Loaded")
-
-        model.temp_fusion.load_state_dict(end2end_model.temp_fusion.state_dict())
-
-    else:
-        if os.path.exists(GR_STF_MODEL_PATH):
-            model.temp_fusion.load_state_dict(torch.load(GR_STF_MODEL_PATH, map_location=DEVICE))
-            print("Temp fusion model Loaded")
-        else:
-            print("Temp fusion model doesnt exist")
-            exit(0)
-
-    return model
-
-
 def save_model(model, best_loss):
     best_loss_dir = os.path.split(GR_LOSS_PATH)[0]
     if not os.path.exists(best_loss_dir):
@@ -55,24 +32,18 @@ def save_model(model, best_loss):
     with open(GR_LOSS_PATH, 'w') as f:
         f.write(str(best_loss) + "\n")
 
-    temp_fusion = model.temp_fusion
-
-    torch.save(temp_fusion.state_dict(), GR_STF_MODEL_PATH)
+    torch.save(model.stf.state_dict(), STF_MODEL_PATH)
     print("Model Saved")
 
 
 def train(model, datasets):
     print("GR model training...")
     print("Mode:", SRC_MODE)
-    print("Features:", IMG_FEAT_MODEL)
+    print("Features:", STF_MODEL)
     best_loss = get_best_loss()
     optimizer = Adam(model.parameters(), lr=GR_LR)
 
-    if IGNORE_BLANK:
-        loss_fn = nn.CrossEntropyLoss()
-    else:
-
-        loss_fn = nn.CrossEntropyLoss()
+    loss_fn = nn.CrossEntropyLoss()
 
     try:
         for epoch in range(1, END2END_N_EPOCHS + 1):

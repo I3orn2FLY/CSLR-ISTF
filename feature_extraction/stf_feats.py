@@ -1,31 +1,30 @@
 from common import *
 from utils import *
-from models import ImgFeat, SpatioTemporalFusionComb, SLR
+from models import STF_2D, STF_2Plus1D, SLR
 from config import *
 
 
 def generate_cnn_features():
-    vocab = Vocab()
-    if IMG_FEAT_MODEL.startswith("densenet") or IMG_FEAT_MODEL.startswith("googlenet"):
-        mode = "2D"
-        model = ImgFeat().to(DEVICE)
-        preprocess = preprocess_2d
-    elif IMG_FEAT_MODEL.startswith("resnet{2+1}d"):
-        mode = "3D"
-        model = SpatioTemporalFusionComb().to(DEVICE)
-        if USE_END2END_MODEL:
-            if os.path.exists(GR_END2END_MODEL_PATH):
-                end2end_model = SLR(512, vocab.size, False, 1).to(DEVICE)
-                end2end_model.load_state_dict(torch.load(GR_END2END_MODEL_PATH, map_location=DEVICE))
-                model.load_state_dict(end2end_model.temp_fusion.state_dict())
-        elif os.path.exists(GR_STF_MODEL_PATH):
-            model.load_state_dict(torch.load(GR_STF_MODEL_PATH, map_location=DEVICE))
-
-        preprocess = preprocess_3d
-    else:
-        print("Incorrect feature extraction model:", IMG_FEAT_MODEL)
+    if not os.path.exists(STF_MODEL_PATH):
+        print("STF model doesnt exist:", STF_MODEL_PATH)
         exit(0)
 
+    if STF_MODEL.startswith("densenet") or STF_MODEL.startswith("googlenet"):
+        mode = "2D"
+        model = STF_2D(use_feat=False).to(DEVICE)
+        preprocess = preprocess_2d
+    elif STF_MODEL.startswith("resnet{2+1}d"):
+        mode = "3D"
+        model = STF_2Plus1D().to(DEVICE)
+        preprocess = preprocess_3d
+    else:
+        model = None
+        preprocess = None
+        mode = None
+        print("Incorrect feature extraction model:", STF_MODEL)
+        exit(0)
+
+    model.load_state_dict(torch.load(STF_MODEL_PATH, map_location=DEVICE))
     model.eval()
 
     with torch.no_grad():
@@ -40,7 +39,7 @@ def generate_cnn_features_split(model, preprocess, split, mode):
 
     df = get_split_df(split)
 
-    print(SOURCE, IMG_FEAT_MODEL, "feature extraction:", split, "split")
+    print(SOURCE, STF_MODEL, "feature extraction:", split, "split")
     L = df.shape[0]
 
     pp = ProgressPrinter(L, 10)
@@ -48,10 +47,10 @@ def generate_cnn_features_split(model, preprocess, split, mode):
         row = df.iloc[idx]
         if SOURCE == "PH":
             video_dir = os.sep.join([VIDEOS_DIR, split, row.folder])
-            feat_path = os.sep.join([VIDEO_FEAT_DIR, split, row.folder.replace("/1/*.png", ".pt")])
+            feat_path = os.sep.join([STF_FEAT_DIR, split, row.folder.replace("/1/*.png", ".pt")])
         else:
             video_dir = os.path.join(VIDEOS_DIR, row.video)
-            feat_path = os.path.join(VIDEO_FEAT_DIR, row.video).replace(".mp4", ".pt")
+            feat_path = os.path.join(STF_FEAT_DIR, row.video).replace(".mp4", ".pt")
 
         if os.path.exists(feat_path) and not FEAT_OVERRIDE:
             pp.omit()

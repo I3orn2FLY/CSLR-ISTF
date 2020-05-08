@@ -8,15 +8,17 @@ from torch.optim import Adam
 from utils import ProgressPrinter, Vocab
 from common import predict_glosses
 from dataset import get_end2end_datasets
-from models import SLR
+from models import get_end2end_model
 from config import *
 
 np.random.seed(0)
 
-torch.backends.cudnn.deterministic = True
+
+# torch.backends.cudnn.deterministic = True
 
 
-def get_wer_info(phases=["Train", "Val"]):
+def get_best_wer():
+    phases = ["train", "val"]
     best_wer = {phase: float("inf") for phase in phases}
 
     for phase in phases:
@@ -25,20 +27,23 @@ def get_wer_info(phases=["Train", "Val"]):
             with open(wer_path, 'r') as f:
                 best_wer[phase] = float(f.readline().strip())
 
-        print("BEST", phase, "WER:", best_wer[phase])
-
+    print("BEST WER:", best_wer)
     return best_wer
 
 
-def phase_path(name, phase):
-    ext = os.path.splitext(name)[1]
-    if phase == "Train":
-        return name.replace("Val" + ext, "Train" + ext)
-    return name
+def phase_path(path, phase):
+    dir, filename = os.path.split(path)
+    filename = filename.replace("train", phase)
+    filename = filename.replace("val", phase)
+    return os.path.join(dir, filename)
 
 
-def save_model(model, phase, best_wer):
-    model_dir = os.path.split(END2END_MODEL_PATH)[0]
+def save_end2end_model(model, phase, best_wer, use_feat):
+    model_dir = os.path.split(STF_MODEL_PATH)[0]
+    if not os.path.exists(model_dir):
+        os.makedirs(model_dir)
+
+    model_dir = os.path.split(STF_MODEL_PATH)[0]
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
 
@@ -49,48 +54,29 @@ def save_model(model, phase, best_wer):
     with open(phase_path(END2END_WER_PATH, phase), 'w') as f:
         f.write(str(best_wer) + "\n")
 
-    torch.save(model.state_dict(), phase_path(END2END_MODEL_PATH, phase))
+    torch.save(model.stf.state_dict(), phase_path(STF_MODEL_PATH, phase))
+    torch.save(model.seq2seq.state_dict(), phase_path(SEQ2SEQ_MODEL_PATH, phase))
     print("Model Saved")
 
 
-def get_end2end_model(vocab, use_gr=USE_TUNED_GR):
-    model = SLR(rnn_hidden=512, vocab_size=vocab.size, temp_fusion_type=TEMP_FUSION_TYPE).to(DEVICE)
-
-    if not END2END_MODEL_LOAD: return model
-
-    if use_gr:
-        model.temp_fusion.load_state_dict(torch.load(GR_STF_MODEL_PATH, map_location=DEVICE))
-    else:
-
-        model_path = phase_path(END2END_MODEL_PATH, "Train") if USE_OVERFIT else END2END_MODEL_PATH
-
-        if os.path.exists(model_path):
-            model.load_state_dict(torch.load(model_path, map_location=DEVICE))
-            print("Model Loaded")
-        else:
-            print("Model Initialized")
-
-    return model
-
-
-def train(model, vocab, datasets):
+def train(model, vocab, datasets, use_feat):
     print("END2END model training...")
     print("Mode:", SRC_MODE)
-    print("Features:", IMG_FEAT_MODEL)
-    print("Save Model path:", END2END_MODEL_PATH)
+    print("Features:", STF_MODEL)
+    print("Save Model path:", STF_MODEL_PATH)
     print("WER path:", END2END_WER_PATH)
 
     optimizer = Adam(model.parameters(), lr=END2END_LR)
     loss_fn = nn.CTCLoss(zero_infinity=True)
 
-    best_wer = get_wer_info()
-    curve = {"Train": [], "Val": []}
+    best_wer = get_best_wer()
+    curve = {"train": [], "val": []}
     try:
 
         for epoch in range(1, END2END_N_EPOCHS + 1):
             print("Epoch", epoch)
-            for phase in ['Train', 'Val']:
-                if phase == 'Train':
+            for phase in ["train", "val"]:
+                if phase == "train":
                     model.train()  # Set model to training mode
                 else:
                     model.eval()
@@ -101,8 +87,8 @@ def train(model, vocab, datasets):
                 hypes = []
                 gts = []
 
-                with torch.set_grad_enabled(phase == "Train"):
-                    pp = ProgressPrinter(n_batches, 25 if USE_FEAT else 1)
+                with torch.set_grad_enabled(phase == "train"):
+                    pp = ProgressPrinter(n_batches, 25 if USE_STF_FEAT else 1)
                     for i in range(n_batches):
                         optimizer.zero_grad()
                         X_batch, Y_batch, Y_lens = dataset.get_batch(i)
@@ -118,7 +104,7 @@ def train(model, vocab, datasets):
 
                         losses.append(loss.item())
 
-                        if phase == "Train":
+                        if phase == "train":
                             loss.backward()
                             optimizer.step()
 
@@ -146,11 +132,11 @@ def train(model, vocab, datasets):
 
                 curve[phase].append(phase_wer)
                 phase_loss = np.mean(losses)
-                print(phase, "WER:", phase_wer, "Loss:", phase_loss)
+                print(phase.upper(), "WER:", phase_wer, "Loss:", phase_loss)
 
                 if phase_wer < best_wer[phase]:
                     best_wer[phase] = phase_wer
-                    save_model(model, phase, best_wer[phase])
+                    save_end2end_model(model, phase, best_wer[phase], use_feat=use_feat)
 
             print()
             print()
@@ -165,6 +151,6 @@ def train(model, vocab, datasets):
 if __name__ == "__main__":
     vocab = Vocab()
 
-    model = get_end2end_model(vocab)
+    model, _ = get_end2end_model(vocab, load=END2END_MODEL_LOAD, stf_type=STF_TYPE, use_feat=USE_STF_FEAT)
     datasets = get_end2end_datasets(vocab)
-    train(model, vocab, datasets)
+    train(model, vocab, datasets, USE_STF_FEAT)

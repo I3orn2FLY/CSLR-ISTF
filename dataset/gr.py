@@ -1,6 +1,6 @@
 import pickle
 import shutil
-from models import SLR
+from models import get_end2end_model
 from common import *
 from utils import *
 
@@ -37,26 +37,19 @@ def get_gloss_paths(images, pad_image, gloss_idx, stride, save=True):
 
 
 def generate_gloss_dataset(vocab):
-    if not IMG_FEAT_MODEL.startswith("resnet{2+1}d") or TEMP_FUSION_TYPE != 1 or USE_FEAT:
-        print("Incorrect feature extraction model:", IMG_FEAT_MODEL, TEMP_FUSION_TYPE, USE_FEAT)
+    if not STF_MODEL.startswith("resnet{2+1}d") or STF_TYPE != 1 or USE_STF_FEAT:
+        print("Incorrect feature extraction model:", STF_MODEL, STF_TYPE, USE_STF_FEAT)
         exit(0)
 
-    model = SLR(rnn_hidden=512, vocab_size=vocab.size, temp_fusion_type=1).to(DEVICE)
+    model, loaded = get_end2end_model(vocab, load=True, stf_type=1, use_feat=False).to(DEVICE)
 
-    if os.path.exists(END2END_MODEL_PATH):
-        model.load_state_dict(torch.load(END2END_MODEL_PATH, map_location=DEVICE))
-        print("Model Loaded")
-    else:
-        print("Model doesnt exist")
+    if not loaded:
+        print("STF or SEQ2SEQ model doesn't exist")
         exit(0)
-
-    if not os.path.exists(os.path.split(GR_STF_MODEL_PATH)[0]):
-        os.makedirs(os.path.split(GR_STF_MODEL_PATH)[0])
-    torch.save(model.temp_fusion.state_dict(), GR_STF_MODEL_PATH)
 
     model.eval()
 
-    pad_image = 255 * np.ones((IMG_SIZE_3D, IMG_SIZE_3D, 3)) * np.array([0.406, 0.485, 0.456])
+    pad_image = 255 * np.ones((IMG_SIZE_2Plus1D, IMG_SIZE_2Plus1D, 3)) * np.array([0.406, 0.485, 0.456])
 
     pad_image = pad_image.astype(np.uint8)
 
@@ -80,15 +73,15 @@ def generate_gloss_dataset(vocab):
             else:
                 print("Wrong Dataset:", SOURCE)
                 exit(0)
-            images = get_images(video_dir, size=(IMG_SIZE_3D, IMG_SIZE_3D))
+            images = get_images(video_dir, size=(IMG_SIZE_2Plus1D, IMG_SIZE_2Plus1D))
             if len(images) < 4:
                 continue
 
-            if USE_FEAT:
+            if USE_STF_FEAT:
                 if SOURCE == "PH":
-                    feat_path = os.sep.join([VIDEO_FEAT_DIR, "train", row.folder.replace("/1/*.png", ".pt")])
+                    feat_path = os.sep.join([STF_FEAT_DIR, "train", row.folder.replace("/1/*.png", ".pt")])
                 elif SOURCE == "KRSL":
-                    feat_path = os.path.join(VIDEO_FEAT_DIR, row.video).replace(".mp4", ".pt")
+                    feat_path = os.path.join(STF_FEAT_DIR, row.video).replace(".mp4", ".pt")
 
                 tensor_video = torch.load(feat_path).unsqueeze(0).to(DEVICE)
             else:
@@ -197,7 +190,7 @@ class GR_dataset():
         for img_file in image_files:
             img = cv2.imread(img_file)
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            img = cv2.resize(img, (IMG_SIZE_3D, IMG_SIZE_3D))
+            img = cv2.resize(img, (IMG_SIZE_2Plus1D, IMG_SIZE_2Plus1D))
             img = img.astype(np.float32) / 255
             img = (img - self.mean) / self.std
             images.append(img)

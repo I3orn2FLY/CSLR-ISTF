@@ -10,6 +10,7 @@ from utils import Vocab
 def get_video_worker(args):
     video_dir, mean, std, aug_frame, aug_temp, aug_len, skip_idxs = args
 
+    video_dir = os.path.join(VIDEOS_DIR, video_dir)
     images = get_images(video_dir)
 
     if aug_temp:
@@ -21,7 +22,7 @@ def get_video_worker(args):
 
     video = []
     for img in images:
-        if TEMP_FUSION_TYPE == 0:
+        if STF_TYPE == 0:
             img = preprocess_2d(img)
         else:
             img = preprocess_3d(img)
@@ -29,7 +30,7 @@ def get_video_worker(args):
 
     video = np.stack(video).astype(np.float32)
 
-    if TEMP_FUSION_TYPE == 0:
+    if STF_TYPE == 0:
         video = video.transpose([0, 3, 1, 2])
     else:
         video = video.transpose([3, 0, 1, 2])
@@ -40,7 +41,7 @@ def get_video_worker(args):
 class End2EndRawDataset(End2EndDataset):
     def __init__(self, vocab, split, max_batch_size, augment_frame=True, augment_temp=True):
         # maybe implement this
-        if USE_FEAT:
+        if USE_STF_FEAT:
             print("Error, using Features")
             exit(0)
         super(End2EndRawDataset, self).__init__(vocab, split, max_batch_size, augment_frame, augment_temp)
@@ -56,13 +57,13 @@ class End2EndRawDataset(End2EndDataset):
 
     def _get_feat(self, row, glosses=None):
         if SOURCE == "PH":
-            video_dir = os.sep.join([VIDEOS_DIR, self.split, row.folder])
+            video_dir = os.path.join(self.split, row.folder)
         elif SOURCE == "KRSL":
-            video_dir = os.path.join(VIDEOS_DIR, row.video)
+            video_dir = row.video
         else:
             return None, None, None
 
-        feat = get_images(video_dir)
+        feat = get_images(os.path.join(VIDEOS_DIR, video_dir))
         feat_len = len(feat)
 
         if feat_len < len(glosses) * 4:

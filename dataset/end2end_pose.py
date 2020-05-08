@@ -7,6 +7,8 @@ from utils import Vocab
 from config import *
 
 
+# TODO implement loading pose data and generate stf feats from 1d cnns maybe new code for stf_feats is needed
+
 def process_video_pose(video_pose, augment_frame=True):
     video_pose = video_pose.reshape(-1, 137, 3)
     idxs = []
@@ -37,16 +39,16 @@ def process_video_pose(video_pose, augment_frame=True):
 
 class End2EndPoseDataset(End2EndDataset):
     def __init__(self, vocab, split, max_batch_size, augment_frame=True, augment_temp=True):
-        if (not IMG_FEAT_MODEL.startswith("pose")) or SRC_MODE == "HAND" or (not USE_FEAT):
-            print("Incorrect params => ", IMG_FEAT_MODEL, SRC_MODE, "USE_FEAT:", USE_FEAT)
+        if (not STF_MODEL.startswith("pose")) or SRC_MODE == "HAND" or (not USE_STF_FEAT):
+            print("Incorrect params => ", STF_MODEL, SRC_MODE, "USE_FEAT:", USE_STF_FEAT)
             exit(0)
         super(End2EndPoseDataset, self).__init__(vocab, split, max_batch_size, augment_frame, augment_temp)
 
     def _get_feat(self, row, glosses=None):
         if SOURCE == "PH":
-            feat_path = os.sep.join([VIDEO_FEAT_DIR, self.split, row.folder.replace("/1/*.png", ".npy")])
+            feat_path = os.sep.join([STF_FEAT_DIR, self.split, row.folder.replace("/1/*.png", ".npy")])
         elif SOURCE == "KRSL":
-            feat_path = os.path.join(VIDEO_FEAT_DIR, row.video).replace(".mp4", ".npy")
+            feat_path = os.path.join(STF_FEAT_DIR, row.video).replace(".mp4", ".npy")
         else:
             return None, None, None
 

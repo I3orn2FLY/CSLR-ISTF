@@ -86,7 +86,7 @@ class PoseEstimator():
 def generate_openpose_features_split(pose_estimator, split):
     with torch.no_grad():
         df = get_split_df(split)
-        print(SOURCE, "Feature extraction:", IMG_FEAT_MODEL, split, "split")
+        print(SOURCE, "Feature extraction:", STF_MODEL, split, "split")
         L = df.shape[0]
 
         pp = ProgressPrinter(L, 1)
@@ -94,10 +94,10 @@ def generate_openpose_features_split(pose_estimator, split):
             row = df.iloc[idx]
             if SOURCE == "PH":
                 video_dir = os.sep.join([VIDEOS_DIR, split, row.folder])
-                feat_file = os.sep.join([VIDEO_FEAT_DIR, split, row.folder.replace("/1/*.png", ".npy")])
+                feat_file = os.sep.join([STF_FEAT_DIR, split, row.folder.replace("/1/*.png", ".npy")])
             else:
                 video_dir = os.path.join(VIDEOS_DIR, row.video)
-                feat_file = os.path.join(VIDEO_FEAT_DIR, row.video).replace(".mp4", ".npy")
+                feat_file = os.path.join(STF_FEAT_DIR, row.video).replace(".mp4", ".npy")
 
             if os.path.exists(feat_file):
                 pp.omit()
@@ -127,8 +127,8 @@ def generate_openpose_features_split(pose_estimator, split):
 
 
 def generate_openpose_features():
-    if IMG_FEAT_MODEL not in ["pose"]:
-        print("Incorrect feature extraction model:", IMG_FEAT_MODEL)
+    if STF_MODEL not in ["pose"]:
+        print("Incorrect feature extraction model:", STF_MODEL)
         exit(0)
 
     pose_estimator = PoseEstimator()

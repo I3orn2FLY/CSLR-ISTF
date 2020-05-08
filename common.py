@@ -21,8 +21,8 @@ def preprocess_2d(img):
 
 
 def preprocess_3d(img):
-    if img.shape[:2] != (IMG_SIZE_3D, IMG_SIZE_3D):
-        img = cv2.resize(img, (IMG_SIZE_3D, IMG_SIZE_3D))
+    if img.shape[:2] != (IMG_SIZE_2Plus1D, IMG_SIZE_2Plus1D):
+        img = cv2.resize(img, (IMG_SIZE_2Plus1D, IMG_SIZE_2Plus1D))
 
     img = preprocess_img(img, np.array([0.43216, 0.394666, 0.37645]), np.array([0.22803, 0.22145, 0.216989]))
 
