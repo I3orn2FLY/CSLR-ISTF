@@ -36,7 +36,7 @@ def save_model(model, best_loss):
     print("Model Saved")
 
 
-def train(model, datasets):
+def train_gloss_recog(model, datasets):
     print("GR model training...")
     print("Mode:", SRC_MODE)
     print("Features:", STF_MODEL)
@@ -110,4 +110,4 @@ if __name__ == "__main__":
     vocab = Vocab()
     model = get_GR_model(vocab)
     datasets = get_gr_datasets()
-    train(model, datasets)
+    train_gloss_recog(model, datasets)

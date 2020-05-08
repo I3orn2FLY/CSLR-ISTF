@@ -59,7 +59,7 @@ def save_end2end_model(model, phase, best_wer, use_feat):
     print("Model Saved")
 
 
-def train(model, vocab, datasets, use_feat):
+def train_end2end(model, vocab, datasets, use_feat):
     print("END2END model training...")
     print("Mode:", SRC_MODE)
     print("Features:", STF_MODEL)
@@ -153,4 +153,4 @@ if __name__ == "__main__":
 
     model, _ = get_end2end_model(vocab, load=END2END_MODEL_LOAD, stf_type=STF_TYPE, use_feat=USE_STF_FEAT)
     datasets = get_end2end_datasets(vocab)
-    train(model, vocab, datasets, USE_STF_FEAT)
+    train_end2end(model, vocab, datasets, USE_STF_FEAT)
