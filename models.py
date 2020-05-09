@@ -68,9 +68,8 @@ class SLR(nn.Module):
             self.stf = nn.Identity()
         else:
             if stf_type == 0:
-                self.stf = STF_2D(use_feat=use_feat)
+                self.stf = STF_2D()
             elif stf_type == 1:
-
                 self.stf = STF_2Plus1D()
             else:
                 print("Incorrect STF type", stf_type)
@@ -110,26 +109,24 @@ class GR(nn.Module):
 class STF_2Plus1D(nn.Module):
     def __init__(self):
         super(STF_2Plus1D, self).__init__()
-        self.cnn_3d = models.video.r2plus1d_18(pretrained=True)
+        self.cnn = models.video.r2plus1d_18(pretrained=True)
         self.avgpool = nn.AvgPool3d(kernel_size=(1, 7, 7))
 
     def forward(self, x):
-        x = self.cnn_3d.stem(x)
-        x = self.cnn_3d.layer1(x)
-        x = self.cnn_3d.layer2(x)
-        x = self.cnn_3d.layer3(x)
+        x = self.cnn.stem(x)
+        x = self.cnn.layer1(x)
+        x = self.cnn.layer2(x)
+        x = self.cnn.layer3(x)
         x = self.avgpool(x)
         x = x.permute(0, 2, 1, 3, 4)
         return x.reshape(-1, x.size(1), 1024)
 
 
 class STF_2D(nn.Module):
-    def __init__(self, use_feat):
+    def __init__(self):
         super(STF_2D, self).__init__()
-        if use_feat:
-            self.feat_m = nn.Identity()
-        else:
-            self.feat_m = ImgFeat()
+
+        self.feat_m = ImgFeat()
 
         self.tf = nn.Sequential(nn.Conv2d(1, 1, kernel_size=(5, 1), padding=(2, 0)),
                                 nn.MaxPool2d(kernel_size=(2, 1), stride=(2, 1)),
@@ -139,12 +136,11 @@ class STF_2D(nn.Module):
         self.use_feat = use_feat
 
     def forward(self, x):
-        if not self.use_feat:
-            B, T, C, X, Y = x.shape
-            x = x.view(B * T, C, X, Y)
-            x = self.feat_m(x)
-            V = x.size(1)
-            x = x.view(B, 1, T, V)
+        B, T, C, X, Y = x.shape
+        x = x.view(B * T, C, X, Y)
+        x = self.feat_m(x)
+        V = x.size(1)
+        x = x.view(B, 1, T, V)
 
         x = self.tf(x).squeeze(1)
 
@@ -152,16 +148,16 @@ class STF_2D(nn.Module):
 
 
 # maybe add use overfit
-def get_end2end_model(vocab, load, stf_type, use_feat):
+def get_end2end_model(vocab, load_stf, load_seq, stf_type, use_feat):
     model = SLR(rnn_hidden=512, vocab_size=vocab.size, stf_type=stf_type).to(DEVICE)
 
     fully_loaded = use_feat
-    if os.path.exists(STF_MODEL_PATH) and load and not use_feat:
+    if os.path.exists(STF_MODEL_PATH) and load_stf and not use_feat:
         model.stf.load_state_dict(torch.load(STF_MODEL_PATH, map_location=DEVICE))
         print("STF model Loaded")
         fully_loaded = True
 
-    if os.path.exists(SEQ2SEQ_MODEL_PATH) and load:
+    if os.path.exists(SEQ2SEQ_MODEL_PATH) and load_seq:
         model.seq2seq.load_state_dict(torch.load(SEQ2SEQ_MODEL_PATH, map_location=DEVICE))
         print("Seq2Seq model Loaded")
     else:

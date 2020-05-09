@@ -35,8 +35,8 @@ class ProgressPrinter():
               + str(minutes) + " minutes "
               + str(seconds) + " seconds left", end=" ")
 
-    def end(self):
-        print("\rProgress: 100%                                                                                       ")
+    def end(self, something=""):
+        print("\r" + something + "Progress: 100%")
 
 
 def get_split_df(split):

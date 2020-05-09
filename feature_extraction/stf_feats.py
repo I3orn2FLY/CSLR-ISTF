@@ -11,7 +11,7 @@ def generate_cnn_features():
 
     if STF_MODEL.startswith("densenet") or STF_MODEL.startswith("googlenet"):
         mode = "2D"
-        model = STF_2D(use_feat=False).to(DEVICE)
+        model = STF_2D().to(DEVICE)
         preprocess = preprocess_2d
     elif STF_MODEL.startswith("resnet{2+1}d"):
         mode = "3D"
@@ -25,6 +25,7 @@ def generate_cnn_features():
         exit(0)
 
     model.load_state_dict(torch.load(STF_MODEL_PATH, map_location=DEVICE))
+
     model.eval()
 
     with torch.no_grad():

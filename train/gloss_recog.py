@@ -33,7 +33,7 @@ def save_model(model, best_loss):
         f.write(str(best_loss) + "\n")
 
     torch.save(model.stf.state_dict(), STF_MODEL_PATH)
-    print("Model Saved")
+    print("    ","Model Saved")
 
 
 def train_gloss_recog(model, datasets):
@@ -45,12 +45,16 @@ def train_gloss_recog(model, datasets):
 
     loss_fn = nn.CrossEntropyLoss()
 
+    best_acc = 0
+    trained = False
     try:
+        # n_epochs since wer was updated
+        since_wer_update = 0
         for epoch in range(1, END2END_N_EPOCHS + 1):
             print("Epoch", epoch)
             for phase in ['Train', 'Val']:
                 if phase == 'Train':
-                    model.train()  # Set model to training mode
+                    model.train()
                 else:
                     model.eval()
 
@@ -75,9 +79,6 @@ def train_gloss_recog(model, datasets):
 
                         correct.append(torch.sum(preds.argmax(dim=1) == Y_batch).item())
 
-                        if torch.isnan(loss):
-                            print("NAN!!")
-
                         losses.append(loss.item())
 
                         if phase == "Train":
@@ -85,29 +86,38 @@ def train_gloss_recog(model, datasets):
                             optimizer.step()
 
                         if SHOW_PROGRESS:
-                            pp.show(i, "Loss: %.3f" % np.mean(losses))
+                            pp.show(i, "    Loss: %.3f" % np.mean(losses))
 
                     if SHOW_PROGRESS:
-                        pp.end()
+                        pp.end("    ")
 
                 phase_loss = np.mean(losses)
                 phase_acc = sum(correct) / len(correct * GR_BATCH_SIZE) * 100
 
-                print(phase, "loss:", phase_loss, "phase ACC:", phase_acc)
+                print("    ",phase, "loss:", phase_loss, "phase ACC:", phase_acc)
 
                 if phase == "Val" and phase_loss < best_loss:
                     best_loss = phase_loss
                     save_model(model, best_loss)
+                    since_wer_update = 0
 
-            print()
-            print()
+                if phase == "Val":
+                    best_acc = max(best_acc, phase_acc)
+                    if since_wer_update >= END2END_STOP_LIMIT:
+                        trained = True
+                        raise KeyboardInterrupt
+                    since_wer_update += 1
+
+
     except KeyboardInterrupt:
         pass
-    print("\nTraining complete:", "Best LOSS:", best_loss)
+
+    return best_acc, trained
 
 
 if __name__ == "__main__":
     vocab = Vocab()
     model = get_GR_model(vocab)
     datasets = get_gr_datasets()
-    train_gloss_recog(model, datasets)
+    best_acc, trained = train_gloss_recog(model, datasets)
+    print("\nTraining complete:", "Best ACC:", best_acc, "Finished:", trained)

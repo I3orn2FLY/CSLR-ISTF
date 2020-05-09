@@ -36,12 +36,12 @@ def get_gloss_paths(images, pad_image, gloss_idx, stride, save=True):
     return gloss_paths
 
 
-def generate_gloss_dataset(vocab):
-    if not STF_MODEL.startswith("resnet{2+1}d") or STF_TYPE != 1 or USE_STF_FEAT:
-        print("Incorrect feature extraction model:", STF_MODEL, STF_TYPE, USE_STF_FEAT)
+def generate_gloss_dataset(vocab, stf_type=STF_TYPE, use_feat=USE_STF_FEAT):
+    if not STF_MODEL.startswith("resnet{2+1}d") or stf_type != 1 or use_feat:
+        print("Incorrect feature extraction model:", STF_MODEL, STF_TYPE, use_feat)
         exit(0)
 
-    model, loaded = get_end2end_model(vocab, load=True, stf_type=1, use_feat=False).to(DEVICE)
+    model, loaded = get_end2end_model(vocab, True, True, stf_type, use_feat).to(DEVICE)
 
     if not loaded:
         print("STF or SEQ2SEQ model doesn't exist")
@@ -77,7 +77,7 @@ def generate_gloss_dataset(vocab):
             if len(images) < 4:
                 continue
 
-            if USE_STF_FEAT:
+            if use_feat:
                 if SOURCE == "PH":
                     feat_path = os.sep.join([STF_FEAT_DIR, "train", row.folder.replace("/1/*.png", ".pt")])
                 elif SOURCE == "KRSL":
@@ -117,7 +117,7 @@ def generate_gloss_dataset(vocab):
 
 
 class GR_dataset():
-    def __init__(self, split, batch_size):
+    def __init__(self, split, load, batch_size):
 
         self.batch_size = batch_size
         self.mean = np.array([0.43216, 0.394666, 0.37645], dtype=np.float32)
@@ -125,9 +125,9 @@ class GR_dataset():
 
         self.batches = [[]]
 
-        self.build_dataset(split)
+        self.build_dataset(split, load)
 
-    def build_dataset(self, split):
+    def build_dataset(self, split, load):
 
         prefix_dir = os.path.join(GR_DATASET_DIR, "VARS")
 
@@ -135,7 +135,7 @@ class GR_dataset():
         Y_path = os.sep.join([prefix_dir, "Y_" + split + ".pkl"])
         X_lens_path = os.sep.join([prefix_dir, "X_lens_" + split + ".pkl"])
 
-        if os.path.exists(X_path) and os.path.exists(Y_path) and os.path.exists(X_lens_path):
+        if load and os.path.exists(X_path) and os.path.exists(Y_path) and os.path.exists(X_lens_path):
             with open(X_path, 'rb') as f:
                 self.X = pickle.load(f)
 
@@ -247,7 +247,7 @@ class GR_dataset():
 if __name__ == "__main__":
     vocab = Vocab()
     generate_gloss_dataset(vocab)
-    gr_train = GR_dataset("train", 64)
+    gr_train = GR_dataset("train", True, 64)
 
     gr_train.start_epoch()
 
