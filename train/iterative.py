@@ -81,7 +81,7 @@ if __name__ == "__main__":
                 if iter_info["WER"] is None and iter_idx == 0:
                     model, _ = get_end2end_model(vocab, False, False, STF_TYPE, False)
                 else:
-                    model, _ = get_end2end_model(vocab, True, True, STF_TYPE, False)
+                    model, _ = get_end2end_model(vocab, True, False, STF_TYPE, False)
 
                 best_wer, finished = train_end2end(model, vocab, datasets, use_feat=False)
                 iter_info["WER"] = best_wer
