@@ -64,7 +64,7 @@ if __name__ == "__main__":
                     generate_gloss_dataset(vocab, use_feat=False)
                     iter_info["GR_DATA_DONE"] = True
                     save_iters_info(iter_info_list, iters_info_path)
-
+                    torch.cuda.empty_cache()
                 while not iter_info["GR_TRAIN_DONE"]:
                     model = get_GR_model(vocab)
                     datasets = get_gr_datasets(load=False)
@@ -72,14 +72,25 @@ if __name__ == "__main__":
                     iter_info["GR_ACC"] = gr_acc
                     iter_info["GR_TRAIN_DONE"] = finished
                     save_iters_info(iter_info_list, iters_info_path)
+                    model = None
+                    torch.cuda.empty_cache()
 
-            if not iter_info["END2END_TRAIN_DONE"]:
+            while not iter_info["END2END_TRAIN_DONE"]:
                 datasets = get_end2end_datasets(vocab, use_feat=False)
-                model, _ = get_end2end_model(vocab, True, True, STF_TYPE, False)
+
+                if iter_info["WER"] is None and iter_idx == 0:
+                    model, _ = get_end2end_model(vocab, False, False, STF_TYPE, False)
+                else:
+                    model, _ = get_end2end_model(vocab, True, True, STF_TYPE, False)
+
                 best_wer, finished = train_end2end(model, vocab, datasets, use_feat=False)
                 iter_info["WER"] = best_wer
                 iter_info["END2END_TRAIN_DONE"] = finished
+                save_iters_info(iter_info_list, iters_info_path)
+                model = None
+                torch.cuda.empty_cache()
 
+            copy_iteration_model(iter_idx)
             print("Iteration", iter_idx, "Finished")
             print()
             print()

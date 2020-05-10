@@ -165,7 +165,7 @@ class End2EndDataset():
 
         return len(self.batches)
 
-    def get_X_batch(self, batch_idxs):
+    def get_X_batch(self, idx):
 
         raise NotImplementedError
 
@@ -173,7 +173,7 @@ class End2EndDataset():
         batch_idxs = self.batches[idx]
         Y_lens = [len(self.Y[i]) for i in batch_idxs]
 
-        X_batch = self.get_X_batch(batch_idxs)
+        X_batch = self.get_X_batch(idx)
 
         max_target_length = max(Y_lens)
 

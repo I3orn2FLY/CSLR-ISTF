@@ -4,6 +4,7 @@ import numpy as np
 
 from utils import *
 from config import *
+from common import get_video_path
 
 sys.path.append(os.path.join(OPENPOSE_FOLDER, "build/python"))
 from openpose import pyopenpose as op
@@ -92,30 +93,19 @@ def generate_openpose_features_split(pose_estimator, split):
         pp = ProgressPrinter(L, 1)
         for idx in range(L):
             row = df.iloc[idx]
-            if SOURCE == "PH":
-                video_dir = os.sep.join([VIDEOS_DIR, split, row.folder])
-                feat_file = os.sep.join([STF_FEAT_DIR, split, row.folder.replace("/1/*.png", ".npy")])
-            else:
-                video_dir = os.path.join(VIDEOS_DIR, row.video)
-                feat_file = os.path.join(STF_FEAT_DIR, row.video).replace(".mp4", ".npy")
+            video_dir, feat_path = get_video_path(row, split, feat_ext=".npy")
 
-            if os.path.exists(feat_file):
+            if os.path.exists(feat_path):
                 pp.omit()
                 continue
 
-            feat_dir = os.path.split(feat_file)[0]
+            feat_dir = os.path.split(feat_path)[0]
 
-            if SOURCE == "PH":
-                video = list(glob.glob(video_dir))
-                video.sort()
-            else:
-                video = video_dir
-
-            feats = pose_estimator.estimate_video_pose(video)
+            feats = pose_estimator.estimate_video_pose(video_dir)
 
             if not os.path.exists(feat_dir):
                 os.makedirs(feat_dir)
-            np.save(feat_file, feats)
+            np.save(feat_path, feats)
 
             if SHOW_PROGRESS:
                 pp.show(idx)

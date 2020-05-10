@@ -2,16 +2,13 @@ import multiprocessing as mp
 
 from dataset.end2end_base import *
 
-from common import get_images, preprocess_2d, preprocess_3d
+from common import get_video_path, get_images, preprocess_2d, preprocess_3d
 
 from utils import Vocab
 
 
 def get_video_worker(args):
-    video_dir, mean, std, aug_frame, aug_temp, aug_len, skip_idxs = args
-
-    video_dir = os.path.join(VIDEOS_DIR, video_dir)
-    images = get_images(video_dir)
+    images, aug_frame, aug_temp, aug_len, skip_idxs = args
 
     if aug_temp:
         images = down_sample(images, aug_len + len(skip_idxs))
@@ -46,9 +43,6 @@ class End2EndRawDataset(End2EndDataset):
             exit(0)
         super(End2EndRawDataset, self).__init__(vocab, split, max_batch_size, augment_frame, augment_temp)
 
-        self.mean = np.array([0.43216, 0.394666, 0.37645], dtype=np.float32)
-        self.std = np.array([0.22803, 0.22145, 0.216989], dtype=np.float32)
-
     def _get_ffm(self):
         return "videos"
 
@@ -56,43 +50,28 @@ class End2EndRawDataset(End2EndDataset):
         return SHOW_PROGRESS
 
     def _get_feat(self, row, glosses=None):
-        if SOURCE == "PH":
-            video_dir = os.path.join(self.split, row.folder)
-        elif SOURCE == "KRSL":
-            video_dir = row.video
-        else:
-            return None, None, None
 
-        feat = get_images(os.path.join(VIDEOS_DIR, video_dir))
+        video_path, feat_path = get_video_path(row, self.split)
+
+        feat = get_images(video_path)
         feat_len = len(feat)
 
         if feat_len < len(glosses) * 4:
             return None, None, None
 
-        return video_dir, feat, feat_len
+        return video_path, feat, feat_len
 
-    def get_X_batch(self, batch_idxs):
-        if USE_MP:
-            pool = mp.Pool(processes=len(batch_idxs))
+    def get_X_batch(self, idx):
+        batch_idxs = self.batches[idx]
+        arg_list = []
+        for i in batch_idxs:
+            images = get_images(self.X[i])
+            arg_list.append((images, self.augment_frame, self.augment_temp,
+                             self.X_aug_lens[i], self.X_skipped_idxs[i]))
 
-            arg_list = []
-            for i in batch_idxs:
-                arg_list.append((self.X[i], self.mean, self.std,
-                                 self.augment_frame, self.augment_temp,
-                                 self.X_aug_lens[i], self.X_skipped_idxs[i]))
-
-            X_batch = pool.map(get_video_worker, arg_list)
-            pool.close()
-            pool.join()
-
-        else:
-            X_batch = []
-            for i in batch_idxs:
-                arg = (self.X[i], self.mean, self.std,
-                       self.augment_frame, self.augment_temp,
-                       self.X_aug_lens[i], self.X_skipped_idxs[i])
-
-                X_batch.append(get_video_worker(arg))
+        X_batch = []
+        for arg in arg_list:
+            X_batch.append(get_video_worker(arg))
 
         X_batch = torch.from_numpy(np.stack(X_batch))
 

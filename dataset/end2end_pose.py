@@ -5,6 +5,7 @@ from dataset.end2end_base import End2EndDataset, random_skip, down_sample
 from utils import Vocab
 
 from config import *
+from common import get_video_path
 
 
 # TODO implement loading pose data and generate stf feats from 1d cnns maybe new code for stf_feats is needed
@@ -45,13 +46,8 @@ class End2EndPoseDataset(End2EndDataset):
         super(End2EndPoseDataset, self).__init__(vocab, split, max_batch_size, augment_frame, augment_temp)
 
     def _get_feat(self, row, glosses=None):
-        if SOURCE == "PH":
-            feat_path = os.sep.join([STF_FEAT_DIR, self.split, row.folder.replace("/1/*.png", ".npy")])
-        elif SOURCE == "KRSL":
-            feat_path = os.path.join(STF_FEAT_DIR, row.video).replace(".mp4", ".npy")
-        else:
-            return None, None, None
 
+        video_path, feat_path = get_video_path(row, self.split, feat_ext=".npy")
         if not os.path.exists(feat_path):
             return None, None, None
 
@@ -63,7 +59,8 @@ class End2EndPoseDataset(End2EndDataset):
 
         return feat_path, feat, feat_len
 
-    def get_X_batch(self, batch_idxs):
+    def get_X_batch(self, idx):
+        batch_idxs = self.batches[idx]
         X_batch = []
         for i in batch_idxs:
             video = np.load(self.X[i])

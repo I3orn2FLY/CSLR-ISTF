@@ -29,28 +29,32 @@ def preprocess_3d(img):
     return img
 
 
-def get_images(video_dir, size=None):
-    images = []
+def get_video_path(row, split, feat_ext=".pt"):
     if SOURCE == "PH":
-        image_files = list(glob.glob(video_dir))
-        image_files.sort()
-        for img_file in image_files:
-            img = cv2.imread(img_file)
-            if size is not None:
-                img = cv2.resize(img, size)
-            images.append(img)
-
+        video_path = os.sep.join([VIDEOS_DIR, split, row.folder.replace("/1/*.png", ".mp4")])
+        feat_path = os.sep.join([STF_FEAT_DIR, split, row.folder.replace("/1/*.png", feat_ext)])
+    elif SOURCE == "KRSL":
+        video_path = os.path.join(VIDEOS_DIR, row.video)
+        feat_path = os.path.join(STF_FEAT_DIR, row.video).replace(".mp4", feat_ext)
     else:
-        cap = cv2.VideoCapture(video_dir)
-        while True:
-            ret, img = cap.read()
-            if not ret:
-                break
+        print("Wrong source dataset:", SOURCE)
+        exit(0)
+        return None, None
+    return video_path, feat_path
 
-            if size is not None:
-                img = cv2.resize(img, size)
-            images.append(img)
-        cap.release()
+
+def get_images(video_path, size=None):
+    images = []
+    cap = cv2.VideoCapture(video_path)
+    while True:
+        ret, img = cap.read()
+        if not ret:
+            break
+
+        if size is not None:
+            img = cv2.resize(img, size)
+        images.append(img)
+    cap.release()
 
     return images
 

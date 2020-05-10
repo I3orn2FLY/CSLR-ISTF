@@ -46,12 +46,7 @@ def generate_cnn_features_split(model, preprocess, split, mode):
     pp = ProgressPrinter(L, 10)
     for idx in range(L):
         row = df.iloc[idx]
-        if SOURCE == "PH":
-            video_dir = os.sep.join([VIDEOS_DIR, split, row.folder])
-            feat_path = os.sep.join([STF_FEAT_DIR, split, row.folder.replace("/1/*.png", ".pt")])
-        else:
-            video_dir = os.path.join(VIDEOS_DIR, row.video)
-            feat_path = os.path.join(STF_FEAT_DIR, row.video).replace(".mp4", ".pt")
+        video_path, feat_path = get_video_path(row, split)
 
         if os.path.exists(feat_path) and not FEAT_OVERRIDE:
             pp.omit()
@@ -59,7 +54,7 @@ def generate_cnn_features_split(model, preprocess, split, mode):
 
         feat_dir = os.path.split(feat_path)[0]
 
-        images = get_images(video_dir)
+        images = get_images(video_path)
         if len(images) < 4:
             continue
 

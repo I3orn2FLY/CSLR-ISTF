@@ -66,26 +66,17 @@ def generate_gloss_dataset(vocab, stf_type=STF_TYPE, use_feat=USE_STF_FEAT):
 
             row = df.iloc[idx]
 
-            if SOURCE == "PH":
-                video_dir = os.sep.join([VIDEOS_DIR, "train", row.folder])
-            elif SOURCE == "KRSL":
-                video_dir = os.path.join(VIDEOS_DIR, row.video)
-            else:
-                print("Wrong Dataset:", SOURCE)
-                exit(0)
-            images = get_images(video_dir, size=(IMG_SIZE_2Plus1D, IMG_SIZE_2Plus1D))
+            video_path, feat_path = get_video_path(row, "train")
+
+            images = get_images(video_path, size=(IMG_SIZE_2Plus1D, IMG_SIZE_2Plus1D))
             if len(images) < 4:
                 continue
 
             if use_feat:
-                if SOURCE == "PH":
-                    feat_path = os.sep.join([STF_FEAT_DIR, "train", row.folder.replace("/1/*.png", ".pt")])
-                elif SOURCE == "KRSL":
-                    feat_path = os.path.join(STF_FEAT_DIR, row.video).replace(".mp4", ".pt")
-
                 tensor_video = torch.load(feat_path).unsqueeze(0).to(DEVICE)
             else:
                 tensor_video = get_tensor_video(images, preprocess_3d, "3D").unsqueeze(0).to(DEVICE)
+
             preds = model(tensor_video).squeeze(1).log_softmax(dim=1).argmax(dim=1)
 
             gloss_paths += get_gloss_paths(images, pad_image, gloss_idx, temp_stride)
