@@ -13,7 +13,7 @@ from config import *
 # TODO test this
 
 def copy_iteration_model(iter_idx):
-    dir = os.sep.join([ITER_WEIGHTS, STF_MODEL, str(IMG_FEAT_SIZE), iter_idx])
+    dir = os.sep.join([ITER_WEIGHTS, STF_MODEL, str(IMG_FEAT_SIZE), str(iter_idx)])
     if not os.path.exists(dir):
         os.makedirs(dir)
     stf_path = os.path.join(dir, "STF.pt")
@@ -90,7 +90,7 @@ if __name__ == "__main__":
                 model = None
                 torch.cuda.empty_cache()
 
-            copy_iteration_model(iter_idx)
+                copy_iteration_model(iter_idx)
             print("Iteration", iter_idx, "Finished")
             print()
             print()

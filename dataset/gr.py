@@ -41,7 +41,8 @@ def generate_gloss_dataset(vocab, stf_type=STF_TYPE, use_feat=USE_STF_FEAT):
         print("Incorrect feature extraction model:", STF_MODEL, STF_TYPE, use_feat)
         exit(0)
 
-    model, loaded = get_end2end_model(vocab, True, True, stf_type, use_feat).to(DEVICE)
+    print("Genearation of the Gloss-Recognition Dataset")
+    model, loaded = get_end2end_model(vocab, True, True, stf_type, use_feat)
 
     if not loaded:
         print("STF or SEQ2SEQ model doesn't exist")
@@ -103,8 +104,11 @@ def generate_gloss_dataset(vocab, stf_type=STF_TYPE, use_feat=USE_STF_FEAT):
     df_train = df.iloc[idxs[:int(0.9 * L)]]
     df_val = df.iloc[idxs[int(0.9 * L):]]
 
-    df_train.to_csv(os.path.join(ANNO_DIR, "gloss_train.csv"), index=None)
-    df_val.to_csv(os.path.join(ANNO_DIR, "gloss_val.csv"), index=None)
+    if not os.path.exists(GR_ANNO_DIR):
+        os.makedirs(GR_ANNO_DIR)
+
+    df_train.to_csv(os.path.join(GR_ANNO_DIR, "gloss_train.csv"), index=None)
+    df_val.to_csv(os.path.join(GR_ANNO_DIR, "gloss_val.csv"), index=None)
 
 
 class GR_dataset():
@@ -176,15 +180,19 @@ class GR_dataset():
     def get_sample(self, i):
         y = self.Y[i]
         image_files = self.X[i]
-        images = []
 
-        for img_file in image_files:
-            img = cv2.imread(img_file)
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            img = cv2.resize(img, (IMG_SIZE_2Plus1D, IMG_SIZE_2Plus1D))
-            img = img.astype(np.float32) / 255
-            img = (img - self.mean) / self.std
-            images.append(img)
+        images = []
+        try:
+            for img_file in image_files:
+                img = cv2.imread(img_file)
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                img = cv2.resize(img, (IMG_SIZE_2Plus1D, IMG_SIZE_2Plus1D))
+                img = img.astype(np.float32) / 255
+                img = (img - self.mean) / self.std
+                images.append(img)
+        except:
+            print(image_files)
+            exit(0)
 
         x = np.stack(images)
 
@@ -237,15 +245,28 @@ class GR_dataset():
 
 if __name__ == "__main__":
     vocab = Vocab()
-    generate_gloss_dataset(vocab)
-    gr_train = GR_dataset("train", True, 64)
+    # generate_gloss_dataset(vocab)
+    # gr_train = GR_dataset("train", True, 64)
+    #
+    # n = gr_train.start_epoch()
+    #
+    # for i in range(n):
+    #     X_batch, Y_batch = gr_train.get_batch(i)
+    #     print(X_batch.size(), Y_batch.size())
 
-    gr_train.start_epoch()
+    df = pd.read_csv(os.path.join(GR_ANNO_DIR, "gloss_" + split + ".csv"))
 
-    X_batch, Y_batch = gr_train.get_batch(0)
-    print(X_batch.size(), Y_batch.size())
+    pp = ProgressPrinter(df.shape[0], 25)
+    for i in range(df.shape[0]):
+        row = df.iloc[i]
+        video_dir = os.path.join(GR_VIDEOS_DIR, row.folder)
+        image_files = list(glob.glob(video_dir))
+        image_files.sort()
 
-    # gr_train.start_epoch()
+        if SHOW_PROGRESS:
+            pp.show(i)
+
+# gr_train.start_epoch()
     # idxs = gr_train.batches[0]
     # X_batch, Y_batch = gr_train.get_batch(0)
     # X_batch = X_batch.numpy()
