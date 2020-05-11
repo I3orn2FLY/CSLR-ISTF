@@ -182,17 +182,14 @@ class GR_dataset():
         image_files = self.X[i]
 
         images = []
-        try:
-            for img_file in image_files:
-                img = cv2.imread(img_file)
-                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                img = cv2.resize(img, (IMG_SIZE_2Plus1D, IMG_SIZE_2Plus1D))
-                img = img.astype(np.float32) / 255
-                img = (img - self.mean) / self.std
-                images.append(img)
-        except:
-            print(image_files)
-            exit(0)
+
+        for img_file in image_files:
+            img = cv2.imread(img_file)
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            img = cv2.resize(img, (IMG_SIZE_2Plus1D, IMG_SIZE_2Plus1D))
+            img = img.astype(np.float32) / 255
+            img = (img - self.mean) / self.std
+            images.append(img)
 
         x = np.stack(images)
 
@@ -225,6 +222,8 @@ class GR_dataset():
 
                 s += self.batch_size
 
+        if shuffle:
+            np.random.shuffle(self.batches)
         return len(self.batches)
 
     def get_batch(self, i):
@@ -246,42 +245,49 @@ class GR_dataset():
 if __name__ == "__main__":
     vocab = Vocab()
     # generate_gloss_dataset(vocab)
-    # gr_train = GR_dataset("train", True, 64)
+    gr_train = GR_dataset("train", True, 64)
+
+    n = gr_train.start_epoch()
+
+    pp = ProgressPrinter(n, 5)
+
+    lengths = {}
+    for i in range(n):
+        X_batch, Y_batch = gr_train.get_batch(i)
+        L = X_batch.size(2)
+        lengths[L] = lengths.get(L, 0) + 1
+        pp.show(i)
+    pp.end()
+    print(lengths)
+
+    # df = pd.read_csv(os.path.join(GR_ANNO_DIR, "gloss_" + split + ".csv"))
     #
-    # n = gr_train.start_epoch()
+    # pp = ProgressPrinter(df.shape[0], 25)
+    # for i in range(df.shape[0]):
+    #     row = df.iloc[i]
+    #     video_dir = os.path.join(GR_VIDEOS_DIR, row.folder)
+    #     image_files = list(glob.glob(video_dir))
+    #     image_files.sort()
     #
-    # for i in range(n):
-    #     X_batch, Y_batch = gr_train.get_batch(i)
-    #     print(X_batch.size(), Y_batch.size())
-
-    df = pd.read_csv(os.path.join(GR_ANNO_DIR, "gloss_" + split + ".csv"))
-
-    pp = ProgressPrinter(df.shape[0], 25)
-    for i in range(df.shape[0]):
-        row = df.iloc[i]
-        video_dir = os.path.join(GR_VIDEOS_DIR, row.folder)
-        image_files = list(glob.glob(video_dir))
-        image_files.sort()
-
-        if SHOW_PROGRESS:
-            pp.show(i)
+    #     if SHOW_PROGRESS:
+    #         pp.show(i)
 
 # gr_train.start_epoch()
-    # idxs = gr_train.batches[0]
-    # X_batch, Y_batch = gr_train.get_batch(0)
-    # X_batch = X_batch.numpy()
-    # print(idxs)
-    # X_batch = X_batch.transpose([0, 2, 3, 4, 1])
-    # mean = np.array([0.43216, 0.394666, 0.37645], dtype=np.float32)
-    # std = np.array([0.22803, 0.22145, 0.216989], dtype=np.float32)
-    #
-    # for vid in X_batch:
-    #     vid = (vid * std + mean) * 255
-    #     vid = vid.astype(np.uint8)
-    #     for image in vid:
-    #         image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-    #         cv2.imshow("window", image)
-    #         if cv2.waitKey(0) == 27:
-    #             exit(0)
-    #
-    # print(X_batch.shape)
+# idxs = gr_train.batches[0]
+# X_batch, Y_batch = gr_train.get_batch(0)
+# X_batch = X_batch.numpy()
+# print(idxs)
+# X_batch = X_batch.transpose([0, 2, 3, 4, 1])
+# mean = np.array([0.43216, 0.394666, 0.37645], dtype=np.float32)
+# std = np.array([0.22803, 0.22145, 0.216989], dtype=np.float32)
+#
+# for vid in X_batch:
+#     vid = (vid * std + mean) * 255
+#     vid = vid.astype(np.uint8)
+#     for image in vid:
+#         image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+#         cv2.imshow("window", image)
+#         if cv2.waitKey(0) == 27:
+#             exit(0)
+#
+# print(X_batch.shape)
