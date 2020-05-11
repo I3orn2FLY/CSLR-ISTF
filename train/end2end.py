@@ -141,16 +141,19 @@ def train_end2end(model, vocab, datasets, use_feat):
                         since_wer_update = 0
 
                 if phase == "val":
-                    if since_wer_update >= END2END_STOP_LIMIT:
+                    if since_wer_update >= END2END_STOP_LIMIT and best_wer["Train"] < 1.0:
                         trained = True
                         raise KeyboardInterrupt
                     since_wer_update += 1
 
+        if epoch >= END2END_N_EPOCHS:
+            trained = True
     except KeyboardInterrupt:
         pass
 
     with open(os.path.join(VARS_DIR, "curve.pkl"), 'wb') as f:
         pickle.dump(curve, f)
+
 
     return best_wer, trained
 

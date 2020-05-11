@@ -33,7 +33,7 @@ def save_model(model, best_loss):
         f.write(str(best_loss) + "\n")
 
     torch.save(model.stf.state_dict(), STF_MODEL_PATH)
-    print("    ","Model Saved")
+    print("    ", "Model Saved")
 
 
 def train_gloss_recog(model, datasets):
@@ -69,8 +69,11 @@ def train_gloss_recog(model, datasets):
                     for i in range(n_batches):
                         if phase == "Train":
                             optimizer.zero_grad()
-
-                        X_batch, Y_batch = dataset.get_batch(i)
+                        try:
+                            X_batch, Y_batch = dataset.get_batch(i)
+                        except:
+                            print(i)
+                            exit(0)
                         X_batch = X_batch.to(DEVICE)
                         Y_batch = Y_batch.to(DEVICE)
 
@@ -94,7 +97,7 @@ def train_gloss_recog(model, datasets):
                 phase_loss = np.mean(losses)
                 phase_acc = sum(correct) / len(correct * GR_BATCH_SIZE) * 100
 
-                print("    ",phase, "loss:", phase_loss, "phase ACC:", phase_acc)
+                print("    ", phase, "loss:", phase_loss, "phase ACC:", phase_acc)
 
                 if phase == "Val" and phase_loss < best_loss:
                     best_loss = phase_loss

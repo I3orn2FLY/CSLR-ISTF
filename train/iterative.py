@@ -57,7 +57,7 @@ if __name__ == "__main__":
                 iter_info_list.append(create_iter_info(iter_idx))
 
             print("Iteration", iter_idx, "Started")
-            iter_info = iter_info_list[-1]
+            iter_info = iter_info_list[iter_idx]
 
             if iter_idx != 0:
                 while not iter_info["GR_DATA_DONE"]:
@@ -79,7 +79,7 @@ if __name__ == "__main__":
                 datasets = get_end2end_datasets(vocab, use_feat=False)
 
                 if iter_info["WER"] is None and iter_idx == 0:
-                    model, _ = get_end2end_model(vocab, False, False, STF_TYPE, False)
+                    model, _ = get_end2end_model(vocab, True, False, STF_TYPE, False)
                 else:
                     model, _ = get_end2end_model(vocab, True, False, STF_TYPE, False)
 

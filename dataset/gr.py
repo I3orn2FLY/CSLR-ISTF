@@ -21,8 +21,8 @@ def get_gloss_paths(images, pad_image, gloss_idx, stride, save=True):
                 gloss_images = images[s:e]
                 if os.path.exists(gloss_video_dir):
                     shutil.rmtree(gloss_video_dir)
-                else:
-                    os.makedirs(gloss_video_dir)
+
+                os.makedirs(gloss_video_dir)
 
                 for idx, image in enumerate(gloss_images):
                     cv2.imwrite(os.path.join(gloss_video_dir, str(idx) + ".jpg"), image)
@@ -181,6 +181,7 @@ class GR_dataset():
         y = self.Y[i]
         image_files = self.X[i]
 
+
         images = []
 
         for img_file in image_files:
@@ -191,8 +192,11 @@ class GR_dataset():
             img = (img - self.mean) / self.std
             images.append(img)
 
-        x = np.stack(images)
-
+        try:
+            x = np.stack(images)
+        except:
+            print(images, image_files)
+            exit(0)
         return x, y
 
     def start_epoch(self, shuffle=True):
@@ -244,8 +248,12 @@ class GR_dataset():
 
 if __name__ == "__main__":
     vocab = Vocab()
-    # generate_gloss_dataset(vocab)
-    gr_train = GR_dataset("train", True, 64)
+    generate_gloss_dataset(vocab)
+
+    ls = list(glob.glob(GR_VIDEOS_DIR + "/*"))
+
+    print(len(ls))
+    gr_train = GR_dataset("train", False, 64)
 
     n = gr_train.start_epoch()
 
@@ -258,7 +266,7 @@ if __name__ == "__main__":
         lengths[L] = lengths.get(L, 0) + 1
         pp.show(i)
     pp.end()
-    print(lengths)
+    # print(lengths)
 
     # df = pd.read_csv(os.path.join(GR_ANNO_DIR, "gloss_" + split + ".csv"))
     #
