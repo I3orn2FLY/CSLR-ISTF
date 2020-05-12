@@ -22,8 +22,8 @@ def copy_iteration_model(iter_idx):
     shutil.copy(SEQ2SEQ_MODEL_PATH, seq2seq_path)
 
 
-def save_iters_info(iter_info_list, iter_info_path):
-    dir = os.path.split(iter_info_path)[0]
+def save_iters_info(iter_info_list, iters_info_path):
+    dir = os.path.split(iters_info_path)[0]
     if not os.path.exists(dir):
         os.makedirs(dir)
 

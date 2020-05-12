@@ -49,8 +49,7 @@ def train_gloss_recog(model, datasets):
     trained = False
     try:
         # n_epochs since wer was updated
-        since_wer_update = 0
-        for epoch in range(1, END2END_N_EPOCHS + 1):
+        for epoch in range(1, GR_N_EPOCHS + 1):
             print("Epoch", epoch)
             for phase in ['Train', 'Val']:
                 if phase == 'Train':
@@ -102,18 +101,16 @@ def train_gloss_recog(model, datasets):
                 if phase == "Val" and phase_loss < best_loss:
                     best_loss = phase_loss
                     save_model(model, best_loss)
-                    since_wer_update = 0
 
                 if phase == "Val":
                     best_acc = max(best_acc, phase_acc)
-                    if since_wer_update >= END2END_STOP_LIMIT:
-                        trained = True
-                        raise KeyboardInterrupt
-                    since_wer_update += 1
 
 
     except KeyboardInterrupt:
         pass
+
+    if epoch >= 5:
+        trained = True
 
     return best_acc, trained
 
