@@ -121,10 +121,10 @@ def train_end2end(model, vocab, datasets, use_feat):
                             print("   ", phase, 'Ex. [' + pred + ']', '[' + gt + ']')
 
                         if SHOW_PROGRESS:
-                            pp.show(i, "   ")
+                            pp.show(i, "    ")
 
                     if SHOW_PROGRESS:
-                        pp.end("   ")
+                        pp.end("    ")
 
                 hypes = "".join([chr(x) for x in hypes])
                 gts = "".join([chr(x) for x in gts])
