@@ -8,7 +8,12 @@ from config import *
 
 
 def get_end2end_datasets(vocab, use_feat=USE_STF_FEAT, include_test=False):
-    args = {"vocab": vocab, "split": "train", "max_batch_size": END2END_BATCH_SIZE,
+    if use_feat:
+        batch_size = END2END_STF_BATCH_SIZE
+    else:
+        batch_size = END2END_RAW_BATCH_SIZE
+
+    args = {"vocab": vocab, "split": "train", "max_batch_size": batch_size,
             "augment_temp": END2END_DATA_AUG_TEMP, "augment_frame": END2END_DATA_AUG_FRAME}
 
     if use_feat:

@@ -37,10 +37,6 @@ def get_video_worker(args):
 
 class End2EndRawDataset(End2EndDataset):
     def __init__(self, vocab, split, max_batch_size, augment_frame=True, augment_temp=True):
-        # maybe implement this
-        if USE_STF_FEAT:
-            print("Error, using Features")
-            exit(0)
         super(End2EndRawDataset, self).__init__(vocab, split, max_batch_size, augment_frame, augment_temp)
 
     def _get_ffm(self):
