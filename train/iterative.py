@@ -1,6 +1,7 @@
 import torch
 import pickle
 import shutil
+from feature_extraction.stf_feats import genenerate_stf_feats
 from models import get_end2end_model, get_GR_model
 from dataset import get_gr_datasets, get_end2end_datasets
 from dataset.gr import generate_gloss_dataset
@@ -22,8 +23,8 @@ def copy_iteration_model(iter_idx):
     shutil.copy(SEQ2SEQ_MODEL_PATH, seq2seq_path)
 
 
-def save_iters_info(iter_info_list, iter_info_path):
-    dir = os.path.split(iter_info_path)[0]
+def save_iters_info(iter_info_list, iters_info_path):
+    dir = os.path.split(iters_info_path)[0]
     if not os.path.exists(dir):
         os.makedirs(dir)
 
@@ -34,6 +35,8 @@ def save_iters_info(iter_info_list, iter_info_path):
 def create_iter_info(iter_idx):
     return {"Iter_idx": iter_idx, "GR_DATA_DONE": False,
             "GR_ACC": None, "GR_TRAIN_DONE": False,
+            "STF_FEATS_DONE": False, "STF_WER": None,
+            "END2END_STF_TRAIN_DONE": False,
             "WER": None, "END2END_TRAIN_DONE": False}
 
 
@@ -61,10 +64,14 @@ if __name__ == "__main__":
 
             if iter_idx != 0:
                 while not iter_info["GR_DATA_DONE"]:
-                    generate_gloss_dataset(vocab, use_feat=False)
-                    iter_info["GR_DATA_DONE"] = True
-                    save_iters_info(iter_info_list, iters_info_path)
-                    torch.cuda.empty_cache()
+                    try:
+                        generate_gloss_dataset(vocab, use_feat=False)
+                        iter_info["GR_DATA_DONE"] = True
+                        save_iters_info(iter_info_list, iters_info_path)
+                        torch.cuda.empty_cache()
+                    except:
+                        exit(0)
+
                 while not iter_info["GR_TRAIN_DONE"]:
                     model = get_GR_model(vocab)
                     datasets = get_gr_datasets(load=False)
@@ -75,13 +82,32 @@ if __name__ == "__main__":
                     model = None
                     torch.cuda.empty_cache()
 
+                while not iter_info["STF_FEATS_DONE"]:
+                    try:
+                        genenerate_stf_feats()
+                        iter_info["STF_FEATS_DONE"] = True
+                        save_iters_info(iter_info_list, iters_info_path)
+                        torch.cuda.empty_cache()
+                    except:
+                        exit(0)
+
+                while not iter_info["END2END_STF_TRAIN_DONE"]:
+                    datasets = get_end2end_datasets(vocab, use_feat=False)
+                    model, _ = get_end2end_model(vocab, True, False, STF_TYPE, True)
+                    best_wer, finished = train_end2end(model, vocab, datasets, use_feat=True)
+                    iter_info["STF_WER"] = best_wer
+                    iter_info["END2END_STF_TRAIN_DONE"] = finished
+                    save_iters_info(iter_info_list, iters_info_path)
+                    model = None
+                    torch.cuda.empty_cache()
+
             while not iter_info["END2END_TRAIN_DONE"]:
                 datasets = get_end2end_datasets(vocab, use_feat=False)
 
                 if iter_info["WER"] is None and iter_idx == 0:
                     model, _ = get_end2end_model(vocab, True, False, STF_TYPE, False)
                 else:
-                    model, _ = get_end2end_model(vocab, True, False, STF_TYPE, False)
+                    model, _ = get_end2end_model(vocab, True, True, STF_TYPE, False)
 
                 best_wer, finished = train_end2end(model, vocab, datasets, use_feat=False)
                 iter_info["WER"] = best_wer

@@ -141,7 +141,7 @@ def train_end2end(model, vocab, datasets, use_feat):
                         since_wer_update = 0
 
                 if phase == "val":
-                    if since_wer_update >= END2END_STOP_LIMIT and best_wer["Train"] < 1.0:
+                    if since_wer_update >= END2END_STOP_LIMIT and best_wer["train"] < 1.0:
                         trained = True
                         raise KeyboardInterrupt
                     since_wer_update += 1

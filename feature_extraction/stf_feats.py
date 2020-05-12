@@ -4,7 +4,7 @@ from models import STF_2D, STF_2Plus1D, SLR
 from config import *
 
 
-def generate_cnn_features():
+def genenerate_stf_feats():
     if not os.path.exists(STF_MODEL_PATH):
         print("STF model doesnt exist:", STF_MODEL_PATH)
         exit(0)
@@ -29,12 +29,12 @@ def generate_cnn_features():
     model.eval()
 
     with torch.no_grad():
-        generate_cnn_features_split(model, preprocess, "train", mode)
-        generate_cnn_features_split(model, preprocess, "test", mode)
-        generate_cnn_features_split(model, preprocess, "dev", mode)
+        gen_stf_feats_split(model, preprocess, "train", mode)
+        gen_stf_feats_split(model, preprocess, "test", mode)
+        gen_stf_feats_split(model, preprocess, "dev", mode)
 
 
-def generate_cnn_features_split(model, preprocess, split, mode):
+def gen_stf_feats_split(model, preprocess, split, mode):
     if SOURCE == "KRSL" and split == "dev":
         split = "val"
 
@@ -79,4 +79,4 @@ def generate_cnn_features_split(model, preprocess, split, mode):
 
 
 if __name__ == "__main__":
-    generate_cnn_features()
+    genenerate_stf_feats()
