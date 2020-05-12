@@ -9,9 +9,6 @@ from common import get_video_path
 
 class End2EndSTFDataset(End2EndDataset):
     def __init__(self, vocab, split, max_batch_size, augment_frame=True, augment_temp=True):
-        if not STF_MODEL.startswith("resnet{2+1}d") or STF_TYPE != 1 or (not USE_STF_FEAT):
-            print("Incorrect feat model:", STF_MODEL, STF_TYPE)
-            exit(0)
         super(End2EndSTFDataset, self).__init__(vocab, split, max_batch_size, augment_frame, augment_temp)
 
     def _get_feat(self, row, glosses=None):

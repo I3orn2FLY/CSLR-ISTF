@@ -92,7 +92,7 @@ if __name__ == "__main__":
                         exit(0)
 
                 while not iter_info["END2END_STF_TRAIN_DONE"]:
-                    datasets = get_end2end_datasets(vocab, use_feat=False)
+                    datasets = get_end2end_datasets(vocab, use_feat=True)
                     model, _ = get_end2end_model(vocab, True, False, STF_TYPE, True)
                     best_wer, finished = train_end2end(model, vocab, datasets, use_feat=True)
                     iter_info["STF_WER"] = best_wer
