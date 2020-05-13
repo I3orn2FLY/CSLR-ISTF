@@ -149,7 +149,7 @@ class STF_2D(nn.Module):
 
 # maybe add use overfit
 def get_end2end_model(vocab, load_stf, load_seq, stf_type, use_feat):
-    model = SLR(rnn_hidden=512, vocab_size=vocab.size, stf_type=stf_type).to(DEVICE)
+    model = SLR(rnn_hidden=512, vocab_size=vocab.size, use_feat=use_feat, stf_type=stf_type).to(DEVICE)
 
     fully_loaded = use_feat
     if os.path.exists(STF_MODEL_PATH) and load_stf and not use_feat:

@@ -4,11 +4,13 @@ import numpy as np
 import Levenshtein as Lev
 import pickle
 from torch.optim import Adam
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from utils import ProgressPrinter, Vocab
 from common import predict_glosses
 from dataset import get_end2end_datasets
 from models import get_end2end_model
+
 from config import *
 
 np.random.seed(0)
@@ -70,13 +72,15 @@ def train_end2end(model, vocab, datasets, use_feat):
     optimizer = Adam(model.parameters(), lr=END2END_LR)
     loss_fn = nn.CTCLoss(zero_infinity=True)
 
+    lr_scheduler = ReduceLROnPlateau(optimizer, factor=0.2, patience=4)
+
     best_wer = get_best_wer()
     curve = {"train": [], "val": []}
 
     trained = False
     try:
         # n_epochs since wer was updated
-        since_wer_update = -5
+        since_wer_update = 0
         for epoch in range(1, END2END_N_EPOCHS + 1):
             print("Epoch", epoch)
             for phase in ["train", "val"]:
@@ -130,6 +134,9 @@ def train_end2end(model, vocab, datasets, use_feat):
                 gts = "".join([chr(x) for x in gts])
                 phase_wer = Lev.distance(hypes, gts) / len(gts) * 100
 
+                if phase=="train":
+                    lr_scheduler.step(phase_wer)
+
                 curve[phase].append(phase_wer)
                 phase_loss = np.mean(losses)
                 print("   ", phase.upper(), "WER:", phase_wer, "Loss:", phase_loss)
@@ -141,7 +148,7 @@ def train_end2end(model, vocab, datasets, use_feat):
                         since_wer_update = 0
 
                 if phase == "val":
-                    if since_wer_update >= END2END_STOP_LIMIT and best_wer["train"] < 1.0:
+                    if since_wer_update >= END2END_STOP_LIMIT and best_wer["train"] < 5.0:
                         trained = True
                         raise KeyboardInterrupt
                     since_wer_update += 1
