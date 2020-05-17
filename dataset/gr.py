@@ -37,8 +37,8 @@ def get_gloss_paths(images, pad_image, gloss_idx, stride, save=True):
 
 
 def generate_gloss_dataset(vocab, stf_type=STF_TYPE, use_feat=USE_STF_FEAT):
-    if not STF_MODEL.startswith("resnet{2+1}d") or stf_type != 1 or use_feat:
-        print("Incorrect feature extraction model:", STF_MODEL, STF_TYPE, use_feat)
+    if not STF_MODEL.startswith("resnet{2+1}d") or stf_type != 1:
+        print("Incorrect feature extraction model:", STF_MODEL, STF_TYPE)
         exit(0)
 
     print("Genearation of the Gloss-Recognition Dataset")
@@ -50,7 +50,7 @@ def generate_gloss_dataset(vocab, stf_type=STF_TYPE, use_feat=USE_STF_FEAT):
 
     model.eval()
 
-    pad_image = 255 * np.ones((IMG_SIZE_2Plus1D, IMG_SIZE_2Plus1D, 3)) * np.array([0.406, 0.485, 0.456])
+    pad_image = 255 * np.ones((260, 210, 3)) * np.array([0.406, 0.485, 0.456])
 
     pad_image = pad_image.astype(np.uint8)
 
@@ -69,10 +69,10 @@ def generate_gloss_dataset(vocab, stf_type=STF_TYPE, use_feat=USE_STF_FEAT):
 
             video_path, feat_path = get_video_path(row, "train")
 
-            images = get_images(video_path, size=(IMG_SIZE_2Plus1D, IMG_SIZE_2Plus1D))
+            images = get_images(video_path)
             if len(images) < 4:
                 continue
-
+            gloss_paths += get_gloss_paths(images, pad_image, gloss_idx, temp_stride)
             if use_feat:
                 tensor_video = torch.load(feat_path).unsqueeze(0).to(DEVICE)
             else:
@@ -80,7 +80,6 @@ def generate_gloss_dataset(vocab, stf_type=STF_TYPE, use_feat=USE_STF_FEAT):
 
             preds = model(tensor_video).squeeze(1).log_softmax(dim=1).argmax(dim=1)
 
-            gloss_paths += get_gloss_paths(images, pad_image, gloss_idx, temp_stride)
             for i in range(preds.size(0)):
                 gloss = preds[i].item()
                 Y.append(gloss)
@@ -180,23 +179,20 @@ class GR_dataset():
     def get_sample(self, i):
         y = self.Y[i]
         image_files = self.X[i]
-
-
         images = []
-
         for img_file in image_files:
             img = cv2.imread(img_file)
+            h, w = img.shape[:2]
+            y1, x1 = int(0.2 * np.random.rand() * h), int(0.2 * np.random.rand() * h)
+            y2, x2 = h - int(0.2 * np.random.rand() * h), w - int(0.2 * np.random.rand() * h)
+            img = img[y1:y2, x1:x2]
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             img = cv2.resize(img, (IMG_SIZE_2Plus1D, IMG_SIZE_2Plus1D))
             img = img.astype(np.float32) / 255
             img = (img - self.mean) / self.std
             images.append(img)
 
-        try:
-            x = np.stack(images)
-        except:
-            print(images, image_files)
-            exit(0)
+        x = np.stack(images)
         return x, y
 
     def start_epoch(self, shuffle=True):
@@ -248,24 +244,24 @@ class GR_dataset():
 
 if __name__ == "__main__":
     vocab = Vocab()
-    generate_gloss_dataset(vocab)
+    generate_gloss_dataset(vocab, use_feat=True)
 
     ls = list(glob.glob(GR_VIDEOS_DIR + "/*"))
 
-    print(len(ls))
-    gr_train = GR_dataset("train", False, 64)
-
-    n = gr_train.start_epoch()
-
-    pp = ProgressPrinter(n, 5)
-
-    lengths = {}
-    for i in range(n):
-        X_batch, Y_batch = gr_train.get_batch(i)
-        L = X_batch.size(2)
-        lengths[L] = lengths.get(L, 0) + 1
-        pp.show(i)
-    pp.end()
+    # print(len(ls))
+    # gr_train = GR_dataset("train", False, 64)
+    #
+    # n = gr_train.start_epoch()
+    #
+    # pp = ProgressPrinter(n, 5)
+    #
+    # lengths = {}
+    # for i in range(n):
+    #     X_batch, Y_batch = gr_train.get_batch(i)
+    #     L = X_batch.size(2)
+    #     lengths[L] = lengths.get(L, 0) + 1
+    #     pp.show(i)
+    # pp.end()
     # print(lengths)
 
     # df = pd.read_csv(os.path.join(GR_ANNO_DIR, "gloss_" + split + ".csv"))

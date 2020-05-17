@@ -77,10 +77,11 @@ def train_end2end(model, vocab, datasets, use_feat):
     best_wer = get_best_wer()
     curve = {"train": [], "val": []}
 
+    current_best_wer = float("inf")
     trained = False
+    # n_epochs since wer was updated
+    since_wer_update = 0
     try:
-        # n_epochs since wer was updated
-        since_wer_update = 0
         for epoch in range(1, END2END_N_EPOCHS + 1):
             print("Epoch", epoch)
             for phase in ["train", "val"]:
@@ -134,7 +135,7 @@ def train_end2end(model, vocab, datasets, use_feat):
                 gts = "".join([chr(x) for x in gts])
                 phase_wer = Lev.distance(hypes, gts) / len(gts) * 100
 
-                if phase=="train":
+                if phase == "train":
                     lr_scheduler.step(phase_wer)
 
                 curve[phase].append(phase_wer)
@@ -144,23 +145,26 @@ def train_end2end(model, vocab, datasets, use_feat):
                 if phase_wer < best_wer[phase]:
                     best_wer[phase] = phase_wer
                     save_end2end_model(model, phase, best_wer[phase], use_feat=use_feat)
-                    if phase == "val":
-                        since_wer_update = 0
 
                 if phase == "val":
-                    if since_wer_update >= END2END_STOP_LIMIT and best_wer["train"] < 5.0:
+                    if phase_wer < current_best_wer:
+                        current_best_wer = phase_wer
+                        since_wer_update = 0
+                    else:
+                        since_wer_update += 1
+
+                    if since_wer_update >= END2END_STOP_LIMIT and not use_feat:
                         trained = True
                         raise KeyboardInterrupt
-                    since_wer_update += 1
 
-        if epoch >= END2END_N_EPOCHS:
-            trained = True
     except KeyboardInterrupt:
         pass
 
+    if epoch >= END2END_N_EPOCHS:
+        trained = True
+
     with open(os.path.join(VARS_DIR, "curve.pkl"), 'wb') as f:
         pickle.dump(curve, f)
-
 
     return best_wer, trained
 

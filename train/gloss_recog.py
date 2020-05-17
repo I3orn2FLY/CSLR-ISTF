@@ -40,7 +40,7 @@ def train_gloss_recog(model, datasets):
     print("GR model training...")
     print("Mode:", SRC_MODE)
     print("Features:", STF_MODEL)
-    best_loss = get_best_loss()
+    best_loss = float("inf")
     optimizer = Adam(model.parameters(), lr=GR_LR)
 
     loss_fn = nn.CrossEntropyLoss()
