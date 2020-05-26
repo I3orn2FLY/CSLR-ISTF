@@ -4,7 +4,7 @@ import shutil
 from feature_extraction.stf_feats import genenerate_stf_feats
 from models import get_end2end_model, get_GR_model
 from dataset import get_gr_datasets, get_end2end_datasets
-from dataset.gr import generate_gloss_dataset
+from feature_extraction.gen_gr_dataset import generate_gloss_dataset
 from train.end2end import train_end2end
 from train.gloss_recog import train_gloss_recog
 from utils import Vocab
@@ -111,7 +111,8 @@ if __name__ == "__main__":
                     model = None
                     torch.cuda.empty_cache()
 
-                    copy_iteration_model(iter_idx)
+
+            copy_iteration_model(iter_idx)
             print("Iteration", iter_idx, "Finished")
             print()
             print()

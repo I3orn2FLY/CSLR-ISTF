@@ -1,5 +1,5 @@
 import torch
-from train.train_end2end import get_end2end_model
+from models import get_end2end_model
 from config import *
 from utils import Vocab
 
@@ -18,7 +18,7 @@ def decode_prediction(pred, vocab):
     for i in range(len(pred)):
         if pred[i] == 0 or (i > 0 and pred[i] == pred[i - 1]):
             duration += step
-            continue
+
 
         durations.append(duration / 25)
         duration = step
@@ -57,10 +57,7 @@ def create_ctm_file_split(model, vocab, split):
 
 if __name__ == "__main__":
     vocab = Vocab()
-    model, loaded = get_end2end_model(vocab, load=True, stf_type=1)
-    if not loaded:
-        print("STF or SEQ2SEQ model doesn't exist")
-        exit(0)
+    model, loaded = get_end2end_model(vocab, False, True, 1, True)
     model.eval()
     with torch.no_grad():
         create_ctm_file_split(model, vocab, "test")
