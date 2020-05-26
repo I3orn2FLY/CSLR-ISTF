@@ -102,6 +102,7 @@ def train_end2end(model, vocab, datasets, use_feat):
                         optimizer.zero_grad()
                         X_batch, Y_batch, Y_lens = dataset.get_batch(i)
                         X_batch = X_batch.to(DEVICE)
+                        Y_batch = Y_batch.to(DEVICE)
 
                         preds = model(X_batch).log_softmax(dim=2)
                         T, N, V = preds.shape
