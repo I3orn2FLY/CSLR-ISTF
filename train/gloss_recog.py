@@ -10,6 +10,7 @@ from models import get_GR_model
 from config import *
 
 random.seed(0)
+torch.backends.cudnn.enabled = False
 
 
 def get_best_loss():
@@ -47,70 +48,64 @@ def train_gloss_recog(model, datasets):
 
     best_acc = 0
     trained = False
-    try:
-        # n_epochs since wer was updated
-        for epoch in range(1, GR_N_EPOCHS + 1):
-            print("Epoch", epoch)
-            for phase in ['Train', 'Val']:
-                if phase == 'Train':
-                    model.train()
-                else:
-                    model.eval()
 
-                dataset = datasets[phase]
-                n_batches = dataset.start_epoch()
-                losses = []
+    # n_epochs since wer was updated
+    for epoch in range(1, GR_N_EPOCHS + 1):
+        print("Epoch", epoch)
+        for phase in ['Train', 'Val']:
+            if phase == 'Train':
+                model.train()
+            else:
+                model.eval()
 
-                correct = []
+            dataset = datasets[phase]
+            n_batches = dataset.start_epoch()
+            losses = []
 
-                with torch.set_grad_enabled(phase == "Train"):
-                    pp = ProgressPrinter(n_batches, 25)
-                    for i in range(n_batches):
-                        if phase == "Train":
-                            optimizer.zero_grad()
-                        try:
-                            X_batch, Y_batch = dataset.get_batch(i)
-                        except:
-                            print(i)
-                            exit(0)
-                        X_batch = X_batch.to(DEVICE)
-                        Y_batch = Y_batch.to(DEVICE)
+            correct = []
 
-                        preds = model(X_batch)
-                        loss = loss_fn(preds, Y_batch)
+            with torch.set_grad_enabled(phase == "Train"):
+                pp = ProgressPrinter(n_batches, 25)
+                for i in range(n_batches):
+                    if phase == "Train":
+                        optimizer.zero_grad()
 
-                        correct.append(torch.sum(preds.argmax(dim=1) == Y_batch).item())
+                    X_batch, Y_batch = dataset.get_batch(i)
 
-                        losses.append(loss.item())
+                    X_batch = X_batch.to(DEVICE)
+                    Y_batch = Y_batch.to(DEVICE)
 
-                        if phase == "Train":
-                            loss.backward()
-                            optimizer.step()
+                    preds = model(X_batch)
+                    loss = loss_fn(preds, Y_batch)
 
-                        if SHOW_PROGRESS:
-                            pp.show(i, "    Loss: %.3f" % np.mean(losses))
+                    correct.append(torch.sum(preds.argmax(dim=1) == Y_batch).item())
+
+                    losses.append(loss.item())
+
+                    if phase == "Train":
+                        loss.backward()
+                        optimizer.step()
 
                     if SHOW_PROGRESS:
-                        pp.end("    ")
+                        pp.show(i, "    Loss: %.3f" % np.mean(losses))
 
-                phase_loss = np.mean(losses)
-                phase_acc = sum(correct) / len(correct * GR_BATCH_SIZE) * 100
+                if SHOW_PROGRESS:
+                    pp.end("    ")
 
-                print("    ", phase, "loss:", phase_loss, "phase ACC:", phase_acc)
+            phase_loss = np.mean(losses)
+            phase_acc = sum(correct) / len(correct * GR_BATCH_SIZE) * 100
 
-                if phase == "Val" and phase_loss < best_loss:
-                    best_loss = phase_loss
-                    save_model(model, best_loss)
+            print("    ", phase, "loss:", phase_loss, "phase ACC:", phase_acc)
 
-                if phase == "Val":
-                    best_acc = max(best_acc, phase_acc)
+            if phase == "Val" and phase_loss < best_loss:
+                best_loss = phase_loss
+                save_model(model, best_loss)
 
+            if phase == "Val":
+                best_acc = max(best_acc, phase_acc)
 
-    except KeyboardInterrupt:
-        pass
-
-    if epoch >= 5:
-        trained = True
+        if epoch >= 5:
+            trained = True
 
     return best_acc, trained
 

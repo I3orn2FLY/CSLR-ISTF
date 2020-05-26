@@ -40,7 +40,7 @@ def get_end2end_datasets(vocab, use_feat=USE_STF_FEAT, include_test=False):
     return datasets
 
 
-def get_gr_datasets(load=True, batch_size=GR_BATCH_SIZE):
+def get_gr_datasets(load=False, batch_size=GR_BATCH_SIZE):
     datasets = dict()
     datasets["Train"] = GR_dataset("train", load, batch_size)
     datasets["Val"] = GR_dataset("val", load, batch_size)
