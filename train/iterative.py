@@ -13,6 +13,7 @@ from config import *
 # TODO test this
 torch.backends.cudnn.enabled = False
 
+
 def copy_iteration_model(iter_idx):
     dir = os.sep.join([ITER_WEIGHTS, STF_MODEL, str(IMG_FEAT_SIZE), str(iter_idx)])
     if not os.path.exists(dir):
@@ -110,7 +111,6 @@ if __name__ == "__main__":
                     save_iters_info(iter_info_list, iters_info_path)
                     model = None
                     torch.cuda.empty_cache()
-
 
             copy_iteration_model(iter_idx)
             print("Iteration", iter_idx, "Finished")
