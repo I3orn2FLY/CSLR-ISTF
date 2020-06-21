@@ -1,7 +1,7 @@
 import torch
 import sys
 import numpy as np
-
+import cv2
 from utils import *
 from config import *
 from common import get_video_path
@@ -117,9 +117,6 @@ def generate_openpose_features_split(pose_estimator, split):
 
 
 def generate_openpose_features():
-    if STF_MODEL not in ["pose"]:
-        print("Incorrect feature extraction model:", STF_MODEL)
-        exit(0)
 
     pose_estimator = PoseEstimator()
     generate_openpose_features_split(pose_estimator, "train")
