@@ -1,4 +1,4 @@
-# CSLR-2Plus1D-CTC
+# CSLR-ISTFT
 Continuous Sign Language Recognition with Iteratively Fine-Tuned Spatiotemporal Fusion. (34.5 and 34.4 WER on Phoenix 2014)
 
 
