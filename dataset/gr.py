@@ -4,7 +4,7 @@ from utils import *
 
 
 class GR_dataset():
-    def __init__(self, split, load, batch_size):
+    def __init__(self, split, load, batch_size, stf_type=STF_TYPE):
 
         self.batch_size = batch_size
         self.mean = np.array([0.43216, 0.394666, 0.37645], dtype=np.float32)
@@ -12,6 +12,7 @@ class GR_dataset():
 
         self.batches = [[]]
 
+        self.stf_type = STF_TYPE
         self.build_dataset(split, load)
 
     def build_dataset(self, split, load):
@@ -128,7 +129,12 @@ class GR_dataset():
             X_batch.append(x)
             Y_batch.append(y)
 
-        X_batch = np.stack(X_batch).transpose([0, 4, 1, 2, 3])
+        X_batch = np.stack(X_batch)
+        if self.stf_type == 0:
+            X_batch = X_batch.transpose([0, 1, 4, 2, 3])
+        else:
+            X_batch = X_batch.transpose([0, 4, 1, 2, 3])
+
         X_batch = torch.Tensor(X_batch)
         Y_batch = torch.LongTensor(Y_batch)
 

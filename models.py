@@ -75,6 +75,7 @@ class SLR(nn.Module):
                 print("Incorrect STF type", stf_type)
                 exit(0)
 
+
         self.seq2seq = BiLSTM(rnn_hidden, vocab_size)
 
     def forward(self, x, x_lengths=None):
@@ -144,7 +145,7 @@ class STF_2D(nn.Module):
 
         x = self.tf(x).squeeze(1)
 
-        return x.permute(1, 0, 2)
+        return x
 
 
 # maybe add use overfit
@@ -191,7 +192,7 @@ def weights_init(m):
 
 if __name__ == "__main__":
     use_feat = False
-    model = SLR(rnn_hidden=512, vocab_size=300, stf_type=1, use_feat=use_feat).to(DEVICE)
+    model = SLR(rnn_hidden=512, vocab_size=300, stf_type=STF_TYPE, use_feat=use_feat).to(DEVICE)
     model.eval()
     batch_size = 8
     T = 12
@@ -201,7 +202,10 @@ if __name__ == "__main__":
         if use_feat:
             inp = torch.rand(batch_size, 1, T, IMG_FEAT_SIZE).to(DEVICE)
         else:
-            inp = torch.rand(batch_size, C, T, D, D).to(DEVICE)
+            if STF_TYPE == 0:
+                inp = torch.rand(batch_size, T, C, D, D).to(DEVICE)
+            else:
+                inp = torch.rand(batch_size, C, T, D, D).to(DEVICE)
 
         out = model(inp)
 
