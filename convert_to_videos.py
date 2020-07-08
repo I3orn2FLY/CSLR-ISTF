@@ -1,10 +1,12 @@
-# TODO make image mean and std calculating and loading
 import glob
 import os
 import cv2
 from config import SRC_MODE, PH_DIR, VIDEOS_DIR
 from utils import ProgressPrinter
 
+
+# Converting into folders with images into video files
+# Because it is much faster to read from cv2.VideoCapture rather than using imread on each image in folder
 
 def convert_phoenix_to_videos():
     if SRC_MODE == "FULL":
@@ -23,7 +25,9 @@ def convert_phoenix_to_videos():
         image_paths = sorted(list(glob.glob(os.path.join(video_dir, "*.png"))))
         video_path = os.path.split(video_dir)[0] + ".mp4"
         video_path = os.sep.join([VIDEOS_DIR] + video_path.split(os.sep)[-2:])
-        if os.path.exists(video_path): continue
+        if os.path.exists(video_path):
+            pp.omit()
+            continue
         video_dir = os.path.split(video_path)[0]
         if not os.path.exists(video_dir):
             os.makedirs(video_dir)

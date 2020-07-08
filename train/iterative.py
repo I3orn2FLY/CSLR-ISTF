@@ -1,7 +1,7 @@
 import torch
 import pickle
 import shutil
-from feature_extraction.stf_feats import genenerate_stf_feats
+from feature_extraction.stf_feats import generate_stf_feats
 from models import get_end2end_model, get_GR_model
 from dataset import get_gr_datasets, get_end2end_datasets
 from feature_extraction.gen_gr_dataset import generate_gloss_dataset
@@ -81,7 +81,7 @@ if __name__ == "__main__":
                     torch.cuda.empty_cache()
 
                 while not iter_info["STF_FEATS_DONE"]:
-                    genenerate_stf_feats()
+                    generate_stf_feats()
                     iter_info["STF_FEATS_DONE"] = True
                     save_iters_info(iter_info_list, iters_info_path)
                     torch.cuda.empty_cache()

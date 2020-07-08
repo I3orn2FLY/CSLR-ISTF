@@ -1,65 +1,76 @@
 import os
 
 # GENERAL VARIABLES
-
 PH_DIR = "path/to/RWTH-PHOENIX Weather 2014/directory"
 KRSL_DIR = "/path/to/KRSL/directory"
-PH_EVA_DIR = os.sep.join([PH_DIR, "evaluation"])
 VARS_DIR = "/path/to/dir/where/code/variables/stored"
+
+# not required if you won't use openpose features
 OPENPOSE_FOLDER = "/path/to/openpose/directory"
 
-# SRC_MODE = "FULL"
-SRC_MODE = "HAND"
+# the ".ctm" file for evaluating the model using phoenix script will be created in this folder
+PH_EVA_DIR = os.sep.join([PH_DIR, "evaluation"])
+
+DEVICE = "cuda:0"
+
 SOURCE = "PH"
 # SOURCE = "KRSL"
 
-WEIGHTS_DIR = os.sep.join([VARS_DIR, SOURCE, SRC_MODE, "WEIGHTS"])
-METRICS_DIR = os.sep.join([VARS_DIR, SOURCE, SRC_MODE, "METRICS"])
+SRC_MODE = "FULL"
+# SRC_MODE = "HAND"
+
+vars_prefix = os.sep.join([VARS_DIR, SOURCE, SRC_MODE])
+
+WEIGHTS_DIR = os.path.join(vars_prefix, "WEIGHTS")
+ITER_VARS_DIR = os.path.join(vars_prefix, "ITERATIVE")
+ITER_WEIGHTS = os.path.join(ITER_VARS_DIR, "WEIGHTS")
+METRICS_DIR = os.path.join(vars_prefix, "METRICS")
+GEN_DATA_DIR = os.path.join(vars_prefix, "GEN_DATA")
+
+END2END_DATASETS_DIR = os.sep.join([GEN_DATA_DIR, "DATASETS", "END2END"])
+GR_DATASET_DIR = os.sep.join([GEN_DATA_DIR, "DATASETS", "GR"])
+GR_ANNO_DIR = os.path.join(GR_DATASET_DIR, "annotation")
+GR_VIDEOS_DIR = os.path.join(GEN_DATA_DIR, "GR_VIDEOS")
 
 IMG_SIZE_2D = 224
-IMG_SIZE_3D = 112
+IMG_SIZE_2Plus1D = 112
 
 ########################################################################################################################
 # END TO END MODEL VARIABLES
-DEVICE = "cuda:0"
-
-END2END_MODEL_LOAD = True
+END2END_MODEL_LOAD = False
 
 if SOURCE == "PH":
     SRC_DIR = PH_DIR
     ANNO_DIR = os.sep.join([PH_DIR, "annotations"])
-    VIDEOS_DIR = os.sep.join([PH_DIR, "features", "fullFrame-210x260px"])
-    if SRC_MODE == "HAND":  VIDEOS_DIR = os.sep.join([PH_DIR, "features", "trackedRightHand-92x132px"])
-
+    VIDEOS_DIR = os.path.join(PH_DIR, "features")
+    if SRC_MODE == "FULL":
+        VIDEOS_DIR = os.path.join(VIDEOS_DIR, "fullFrame-210x260px")
+    else:
+        VIDEOS_DIR = os.path.join(VIDEOS_DIR, "trackedRightHand-92x132px")
 else:
     SRC_DIR = KRSL_DIR
     ANNO_DIR = os.sep.join([KRSL_DIR, "annotation"])
     VIDEOS_DIR = os.path.join(KRSL_DIR, "videos")
 
-USE_MP = True  # Use multi processing
-USE_OVERFIT = False  # Load overfitted model as default
 FEAT_OVERRIDE = True
-USE_FEAT = False
+USE_STF_FEAT = True
 
-# Feature Extractor models
-# IMG_FEAT_MODEL = "densenet121"
-# IMG_FEAT_MODEL = "googlenet"
-# IMG_FEAT_MODEL = "pose"
-IMG_FEAT_MODEL = "resnet{2+1}d"
+# Spatio temporal Feature Extractor models
+STF_MODEL = "densenet121"
+# STF_MODEL = "googlenet"
+# STF_MODEL = "pose"
+# STF_MODEL = "resnet{2+1}d"
 
-VIDEO_FEAT_DIR = os.sep.join([SRC_DIR, "features", IMG_FEAT_MODEL, SRC_MODE])
+STF_FEAT_DIR = os.sep.join([GEN_DATA_DIR, "STF_FEATS", STF_MODEL])
 
-TEMP_FUSION_TYPE = int(IMG_FEAT_MODEL == "resnet{2+1}d")  # 0 => 2D(feat ext and tempfusion), 1 => (2+1)D combined
+STF_TYPE = int(STF_MODEL == "resnet{2+1}d")  # 0 => 2D(feat ext and temp fusion), 1 => (2+1)D combined
 
-if IMG_FEAT_MODEL in ["densenet121", "googlenet", "vgg-s", "resnet{2+1}d"]:
+if STF_MODEL in ["densenet121", "googlenet", "vgg-s", "resnet{2+1}d"]:
     IMG_FEAT_SIZE = 1024
-elif IMG_FEAT_MODEL == "resnet18":
+elif STF_MODEL == "resnet18":
     IMG_FEAT_SIZE = 512
-else:
-    IMG_FEAT_SIZE = None
-
-if IMG_FEAT_MODEL == "pose":
-    USE_FEAT = True
+elif STF_MODEL == "pose":
+    USE_STF_FEAT = True
     POSE_BODY = True
     POSE_HANDS = True
     POSE_FACE = False
@@ -71,55 +82,45 @@ if IMG_FEAT_MODEL == "pose":
     POSE_AUG_NOISE_HANDFACE = 0.01
     POSE_AUG_NOISE_BODY = 0.02
     POSE_AUG_OFFSET = 0
-
-if USE_FEAT:
-    IMG_FEAT_MODEL = IMG_FEAT_MODEL + "(" + str(IMG_FEAT_SIZE) + ")"
 else:
-    img_size = IMG_SIZE_2D if TEMP_FUSION_TYPE == 0 else IMG_SIZE_3D
-    IMG_FEAT_MODEL = IMG_FEAT_MODEL + "(img_" + str(img_size) + "x" + str(img_size) + ")"
+    IMG_FEAT_SIZE = None
+    print("Wrong STF model")
+    exit(0)
+
+if USE_STF_FEAT:
+    FEAT_TYPE = "feat_" + str(IMG_FEAT_SIZE)
+else:
+    img_size = IMG_SIZE_2D if STF_TYPE == 0 else IMG_SIZE_2Plus1D
+    FEAT_TYPE = "img_" + str(img_size) + "x" + str(img_size)
 
 END2END_N_EPOCHS = 100
 
-if USE_FEAT:
-    END2END_BATCH_SIZE = 64
-else:
-    END2END_BATCH_SIZE = 4
+END2END_STF_BATCH_SIZE = 32
+END2END_RAW_BATCH_SIZE = 4
 
-END2END_LR = 0.0001
+END2END_LR = 0.00005
 
 # Augmentation constants
 END2END_DATA_AUG_TEMP = True
 END2END_DATA_AUG_FRAME = True
 RANDOM_SKIP_TH = 0.3
 DOWN_SAMPLE_FACTOR = 0.3
-
-END2END_MODEL_PATH = os.sep.join([WEIGHTS_DIR, "END2END", IMG_FEAT_MODEL, "Val.pt"])
-END2END_WER_PATH = os.sep.join([METRICS_DIR, "END2END_WER", IMG_FEAT_MODEL, "Val.txt"])
-
 ########################################################################################################################
-# GR Model variables
-
-# True to split end2end model, # False to use gr model trained before
-USE_END2END_MODEL = False
-IGNORE_BLANK = True
-
-GLOSS_DATA_DIR = os.sep.join([SRC_DIR, "features", "gloss", SRC_MODE, "images"])
-
-# For iterative training
+# GR Train Variables
 GR_BATCH_SIZE = 32
-GR_LR = 0.0001
-GR_N_EPOCHS = 5
+GR_LR = 0.00005
+GR_N_EPOCHS = 10
+########################################################################################################################
+N_ITER = 6
+END2END_STOP_LIMIT = 10
+########################################################################################################################
+load_crit = "val"
+# load_crit = "train"
 
-GR_END2END_MODEL_PATH = END2END_MODEL_PATH
-
-if USE_OVERFIT:  GR_END2END_MODEL_PATH = END2END_MODEL_PATH.replace("Val", "Train")
-
-GR_STF_MODEL_PATH = os.sep.join([WEIGHTS_DIR, "GR_STF", IMG_FEAT_MODEL + ".pt"])
-GR_LOSS_PATH = os.sep.join([METRICS_DIR, "GR_LOSS", IMG_FEAT_MODEL + ".txt"])
-
-if IGNORE_BLANK:
-    GR_STF_MODEL_PATH = GR_STF_MODEL_PATH.replace(".pt", "_IGN_BLANK.pt")
-    GR_LOSS_PATH = GR_LOSS_PATH.replace(".txt", "_IGN_BLANK.txt")
+STF_MODEL_PATH = os.sep.join([WEIGHTS_DIR, STF_MODEL, str(IMG_FEAT_SIZE), "STF_" + load_crit + ".pt"])
+SEQ2SEQ_MODEL_PATH = os.sep.join([WEIGHTS_DIR, STF_MODEL, str(IMG_FEAT_SIZE), "SEQ2SEQ_" + load_crit + ".pt"])
+END2END_WER_PATH = os.sep.join([METRICS_DIR, STF_MODEL, str(IMG_FEAT_SIZE), "END2END_WER_" + load_crit + ".txt"])
+GR_LOSS_PATH = os.sep.join([METRICS_DIR, STF_MODEL, "GR_LOSS.txt"])
 
 ########################################################################################################################
 # printing variables
@@ -128,5 +129,3 @@ SHOW_PROGRESS = True
 SHOW_EXAMPLE = True
 
 ########################################################################################################################
-
-

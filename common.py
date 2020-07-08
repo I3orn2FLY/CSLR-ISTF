@@ -42,6 +42,19 @@ def get_video_path(row, split, feat_ext=".pt"):
         return None, None
     return video_path, feat_path
 
+def get_video_path(row, split, feat_ext=".pt"):
+    if SOURCE == "PH":
+        video_path = os.sep.join([VIDEOS_DIR, split, row.folder.replace("/1/*.png", ".mp4")])
+        feat_path = os.sep.join([STF_FEAT_DIR, split, row.folder.replace("/1/*.png", feat_ext)])
+    elif SOURCE == "KRSL":
+        video_path = os.path.join(VIDEOS_DIR, row.video)
+        feat_path = os.path.join(STF_FEAT_DIR, row.video).replace(".mp4", feat_ext)
+    else:
+        print("Wrong source dataset:", SOURCE)
+        exit(0)
+        return None, None
+    return video_path, feat_path
+
 
 def get_images(video_path, size=None):
     images = []
