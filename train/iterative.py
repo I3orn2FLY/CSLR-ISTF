@@ -7,7 +7,7 @@ from dataset import get_gr_datasets, get_end2end_datasets
 from feature_extraction.gen_gr_dataset import generate_gloss_dataset
 from train.end2end import train_end2end
 from train.gloss_recog import train_gloss_recog
-from utils import Vocab
+from vocab import Vocab
 from config import *
 
 # TODO test this
@@ -88,7 +88,7 @@ if __name__ == "__main__":
 
                 while not iter_info["END2END_STF_TRAIN_DONE"]:
                     datasets = get_end2end_datasets(vocab, use_feat=True)
-                    model, _ = get_end2end_model(vocab, True, False, STF_TYPE, True)
+                    model, _ = get_end2end_model(vocab, True, STF_TYPE, True)
                     best_wer, finished = train_end2end(model, vocab, datasets, use_feat=True)
                     iter_info["STF_WER"] = best_wer
                     iter_info["END2END_STF_TRAIN_DONE"] = finished
@@ -97,13 +97,15 @@ if __name__ == "__main__":
                     torch.cuda.empty_cache()
 
             else:
+                # TODO
+                # change it that we wont need to to train whole end2end model
                 while not iter_info["END2END_TRAIN_DONE"]:
                     datasets = get_end2end_datasets(vocab, use_feat=False)
 
                     if iter_info["WER"] is None and iter_idx == 0:
-                        model, _ = get_end2end_model(vocab, True, False, STF_TYPE, False)
+                        model, _ = get_end2end_model(vocab, True, STF_TYPE, False)
                     else:
-                        model, _ = get_end2end_model(vocab, True, True, STF_TYPE, False)
+                        model, _ = get_end2end_model(vocab, True, STF_TYPE, False)
 
                     best_wer, finished = train_end2end(model, vocab, datasets, use_feat=False)
                     iter_info["WER"] = best_wer

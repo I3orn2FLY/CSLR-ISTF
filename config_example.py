@@ -54,6 +54,7 @@ else:
 
 FEAT_OVERRIDE = True
 USE_STF_FEAT = True
+USE_IMG_FEAT = True
 
 # Spatio temporal Feature Extractor models
 STF_MODEL = "densenet121"
@@ -129,3 +130,7 @@ SHOW_PROGRESS = True
 SHOW_EXAMPLE = True
 
 ########################################################################################################################
+
+
+# Guideline to run
+#

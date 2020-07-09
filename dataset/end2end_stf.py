@@ -3,8 +3,8 @@ import torch
 from dataset.end2end_base import End2EndDataset, random_skip, down_sample
 
 from config import *
-from utils import Vocab
-from common import get_video_path
+from utils import get_video_path
+from vocab import Vocab
 
 
 class End2EndSTFDataset(End2EndDataset):

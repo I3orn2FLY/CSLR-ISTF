@@ -7,7 +7,7 @@ from dataset.end2end_raw import End2EndRawDataset
 from config import *
 
 
-def get_end2end_datasets(vocab, use_feat=USE_STF_FEAT, include_test=False):
+def get_end2end_datasets(vocab, use_feat=USE_ST_FEAT, include_test=False):
     if use_feat:
         batch_size = END2END_STF_BATCH_SIZE
     else:

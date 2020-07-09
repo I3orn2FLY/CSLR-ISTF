@@ -2,9 +2,8 @@ import torch
 import sys
 import numpy as np
 import cv2
-from utils import *
+from utils import ProgressPrinter, get_split_df, get_video_path
 from config import *
-from common import get_video_path
 
 sys.path.append(os.path.join(OPENPOSE_FOLDER, "build/python"))
 from openpose import pyopenpose as op
@@ -117,7 +116,6 @@ def generate_openpose_features_split(pose_estimator, split):
 
 
 def generate_openpose_features():
-
     pose_estimator = PoseEstimator()
     generate_openpose_features_split(pose_estimator, "train")
     generate_openpose_features_split(pose_estimator, "dev")

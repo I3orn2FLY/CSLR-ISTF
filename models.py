@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torchvision.models as models
 from config import *
+from utils import check_stf_features
 
 
 class ImgFeat(nn.Module):
@@ -59,23 +60,26 @@ class BiLSTM(nn.Module):
 
 class SLR(nn.Module):
 
-    def __init__(self, rnn_hidden, vocab_size, use_feat=USE_STF_FEAT, stf_type=0):
+    def __init__(self, rnn_hidden, vocab_size, use_img_feat=True, use_st_feat=USE_ST_FEAT, stf_type=0):
         # temp_fusion_type = >
         # 0 => 2D temporal fusion
         # 1 => 3D temporal fusion 
         super(SLR, self).__init__()
-        if use_feat:
+
+        if use_st_feat:
             self.stf = nn.Identity()
         else:
             if stf_type == 0:
-                self.stf = STF_2D()
+                self.stf = STF_2D(use_img_feat)
             elif stf_type == 1:
                 self.stf = STF_2Plus1D()
             else:
                 print("Incorrect STF type", stf_type)
                 exit(0)
 
-
+        self.stf_type = stf_type
+        self.use_st_feat = USE_ST_FEAT
+        self.use_img_feat = USE_ST_FEAT
         self.seq2seq = BiLSTM(rnn_hidden, vocab_size)
 
     def forward(self, x, x_lengths=None):
@@ -88,7 +92,7 @@ class SLR(nn.Module):
 
 
 class GR(nn.Module):
-    def __init__(self, vocab_size, use_feat=USE_STF_FEAT, temp_fusion_type=1):
+    def __init__(self, vocab_size, use_feat=USE_ST_FEAT, temp_fusion_type=1):
         super(GR, self).__init__()
         if temp_fusion_type == 0:
             self.stf = STF_2D(use_feat=use_feat)
@@ -124,36 +128,64 @@ class STF_2Plus1D(nn.Module):
 
 
 class STF_2D(nn.Module):
-    def __init__(self):
+    def __init__(self, use_feat=False):
         super(STF_2D, self).__init__()
 
-        self.feat_m = ImgFeat()
+        if use_feat:
+            self.spatial_feat_m = nn.Identity()
+        else:
+            self.spatial_feat_m = ImgFeat()
 
-        self.tf = nn.Sequential(nn.Conv2d(1, 1, kernel_size=(5, 1), padding=(2, 0)),
-                                nn.MaxPool2d(kernel_size=(2, 1), stride=(2, 1)),
-                                nn.Conv2d(1, 1, kernel_size=(5, 1), padding=(2, 0)),
-                                nn.MaxPool2d(kernel_size=(2, 1), stride=(2, 1)))
-
+        self.temporal_feat_m = nn.Sequential(nn.Conv2d(1, 1, kernel_size=(5, 1), padding=(2, 0)),
+                                             nn.MaxPool2d(kernel_size=(2, 1), stride=(2, 1)),
+                                             nn.Conv2d(1, 1, kernel_size=(5, 1), padding=(2, 0)),
+                                             nn.MaxPool2d(kernel_size=(2, 1), stride=(2, 1)))
         self.use_feat = use_feat
 
     def forward(self, x):
-        B, T, C, X, Y = x.shape
-        x = x.view(B * T, C, X, Y)
-        x = self.feat_m(x)
-        V = x.size(1)
+        if not self.use_feat:
+            B, T, C, X, Y = x.shape
+            x = x.view(B * T, C, X, Y)
+            x = self.spatial_feat_m(x)
+            V = x.size(1)
+        else:
+            B, T, V = x.shape
         x = x.view(B, 1, T, V)
 
-        x = self.tf(x).squeeze(1)
+        x = self.temporal_feat_m(x).squeeze(1)
 
         return x
 
 
-# maybe add use overfit
-def get_end2end_model(vocab, load_stf, load_seq, stf_type, use_feat):
-    model = SLR(rnn_hidden=512, vocab_size=vocab.size, use_feat=use_feat, stf_type=stf_type).to(DEVICE)
+# on 0th iter, when you dont load anything, and train whole network (maybe add load_stf extra var to config)
+def get_end2end_model(vocab, load_seq, stf_type, use_st_feat):
+    print("Loading Model... ")
+    if use_st_feat and stf_type == 0:
+        if not check_stf_features(img_feat=False):
+            print("Can not use ST features, they are missing!")
+            if check_stf_features(img_feat=True):
+                print("Initializing with Image_Features")
+                use_img_feat = True
+            else:
+                use_img_feat = False
+                print("Can not use Img features, they are missing! (that's it boy)")
+                exit(0)
+        else:
+            use_img_feat = False
+    else:
+        use_img_feat = False
 
-    fully_loaded = use_feat
-    if os.path.exists(STF_MODEL_PATH) and load_stf and not use_feat:
+    model = SLR(rnn_hidden=512, vocab_size=vocab.size,
+                use_st_feat=use_st_feat, use_img_feat=use_img_feat,
+                stf_type=stf_type).to(DEVICE)
+
+    if stf_type == 0 and use_img_feat and not use_st_feat:
+        if os.path.exists(STF_MODEL_PATH):
+            stf = STF_2D(False)
+            stf.load_state_dict(torch.load(STF_MODEL_PATH, map_location=DEVICE))
+            model.stf.temporal_feat_m = stf.temporal_feat_m
+    fully_loaded = use_st_feat
+    if os.path.exists(STF_MODEL_PATH) and not use_st_feat:
         model.stf.load_state_dict(torch.load(STF_MODEL_PATH, map_location=DEVICE))
         print("STF model Loaded")
         fully_loaded = True
@@ -192,7 +224,9 @@ def weights_init(m):
 
 if __name__ == "__main__":
     use_feat = False
-    model = SLR(rnn_hidden=512, vocab_size=300, stf_type=STF_TYPE, use_feat=use_feat).to(DEVICE)
+    use_img_feat = True
+    model = SLR(rnn_hidden=512, vocab_size=300, stf_type=STF_TYPE,
+                use_img_feat=use_img_feat, use_st_feat=use_feat).to(DEVICE)
     model.eval()
     batch_size = 8
     T = 12
@@ -203,7 +237,10 @@ if __name__ == "__main__":
             inp = torch.rand(batch_size, 1, T, IMG_FEAT_SIZE).to(DEVICE)
         else:
             if STF_TYPE == 0:
-                inp = torch.rand(batch_size, T, C, D, D).to(DEVICE)
+                if use_img_feat:
+                    inp = torch.rand(batch_size, T, IMG_FEAT_SIZE).to(DEVICE)
+                else:
+                    inp = torch.rand(batch_size, T, C, D, D).to(DEVICE)
             else:
                 inp = torch.rand(batch_size, C, T, D, D).to(DEVICE)
 

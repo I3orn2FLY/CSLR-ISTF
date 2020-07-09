@@ -1,12 +1,12 @@
 import torch
+from config import *
 from models import get_end2end_model
-from common import get_video_path
-from utils import *
+from vocab import Vocab
+from utils import ProgressPrinter, get_split_df, get_video_path
 import Levenshtein as Lev
 
 
 def eval_split_by_lev(model, vocab, split):
-
     df = get_split_df(split)
     pp = ProgressPrinter(df.shape[0], 5)
     hypes = []
@@ -88,7 +88,7 @@ def create_ctm_file_split(model, vocab, split):
 
 if __name__ == "__main__":
     vocab = Vocab()
-    model, loaded = get_end2end_model(vocab, False, True, 1, True)
+    model, loaded = get_end2end_model(vocab, True, 1, True)
     model.eval()
     with torch.no_grad():
         create_ctm_file_split(model, vocab, "dev")

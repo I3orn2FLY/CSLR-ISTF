@@ -2,9 +2,10 @@ import multiprocessing as mp
 
 from dataset.end2end_base import *
 
-from common import get_video_path, get_images, preprocess_2d, preprocess_3d
+from processing_tools import get_images, preprocess_2d, preprocess_3d
+from vocab import Vocab
 
-from utils import Vocab
+from utils import get_video_path
 
 
 def get_video_worker(args):

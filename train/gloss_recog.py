@@ -4,7 +4,8 @@ import numpy as np
 from numpy import random
 from torch.optim import Adam
 
-from utils import ProgressPrinter, Vocab
+from utils import ProgressPrinter
+from vocab import Vocab
 from dataset import get_gr_datasets
 from models import get_GR_model
 from config import *

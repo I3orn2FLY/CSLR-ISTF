@@ -1,19 +1,18 @@
-from common import *
-from utils import *
+import torch
+from processing_tools import preprocess_2d, get_images, get_tensor_video
+from utils import ProgressPrinter, get_video_path, get_split_df
 from models import ImgFeat
 from config import *
 
 
 def generate_img_feats():
     model = None
-    preprocess = None
+    preprocess = preprocess_2d
     if STF_MODEL.startswith("densenet") or STF_MODEL.startswith("googlenet"):
         model = ImgFeat().to(DEVICE)
-        preprocess = preprocess_2d
     else:
         print("Incorrect feature extraction model:", STF_MODEL)
         exit(0)
-
 
     model.eval()
 
@@ -23,7 +22,7 @@ def generate_img_feats():
         gen_img_feat_split(model, preprocess, "dev")
 
 
-def gen_img_feat_split(model, preprocess, split, mode):
+def gen_img_feat_split(model, preprocess, split):
     if SOURCE == "KRSL" and split == "dev":
         split = "val"
 
@@ -35,8 +34,7 @@ def gen_img_feat_split(model, preprocess, split, mode):
     pp = ProgressPrinter(L, 10)
     for idx in range(L):
         row = df.iloc[idx]
-        video_path, feat_path = get_video_path(row, split)
-
+        video_path, feat_path = get_video_path(row, split, stf_feat=False)
         if os.path.exists(feat_path) and not FEAT_OVERRIDE:
             pp.omit()
             continue
@@ -47,13 +45,9 @@ def gen_img_feat_split(model, preprocess, split, mode):
         if len(images) < 4:
             continue
 
-        tensor_video = get_tensor_video(images, preprocess, mode)
-        if mode == "2D":
-            inp = tensor_video.to(DEVICE)
-            feat = model(inp).cpu()
-        else:
-            inp = tensor_video.unsqueeze(0).to(DEVICE)
-            feat = model(inp).squeeze(0).cpu()
+        tensor_video = get_tensor_video(images, preprocess, "2D")
+        inp = tensor_video.to(DEVICE)
+        feat = model(inp).cpu()
 
         if not os.path.exists(feat_dir):
             os.makedirs(feat_dir)

@@ -1,8 +1,16 @@
 import shutil
+import cv2
+import torch
+import numpy as np
+import pandas as pd
+from config import *
 from models import get_end2end_model
-from common import *
-from utils import *
+from utils import ProgressPrinter, get_video_path, get_split_df
+from processing_tools import get_tensor_video, get_images, preprocess_3d
+from vocab import Vocab
 
+
+# change for 2d data
 
 def min_dist_transform(hypo, gt):
     dp = [[None for _ in range(len(gt) + 1)] for _ in range(len(hypo) + 1)]
@@ -165,13 +173,13 @@ def get_gloss_paths(images, pad_image, gloss_idx, stride, save=True):
     return gloss_paths
 
 
-def generate_gloss_dataset(vocab, stf_type=STF_TYPE, use_feat=USE_STF_FEAT):
+def generate_gloss_dataset(vocab, stf_type=STF_TYPE, use_feat=USE_ST_FEAT):
     if not STF_MODEL.startswith("resnet{2+1}d") or stf_type != 1:
         print("Incorrect feature extraction model:", STF_MODEL, STF_TYPE)
         exit(0)
 
     print("Genearation of the Gloss-Recognition Dataset")
-    model, loaded = get_end2end_model(vocab, True, True, stf_type, use_feat)
+    model, loaded = get_end2end_model(vocab, True, stf_type, use_feat)
 
     if not loaded:
         print("STF or SEQ2SEQ model doesn't exist")

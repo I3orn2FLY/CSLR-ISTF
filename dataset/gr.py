@@ -1,7 +1,16 @@
+from config import *
+import numpy as np
 import pickle
-from common import *
-from utils import *
+import glob
+import cv2
+import torch
+import pandas as pd
 
+from utils import ProgressPrinter
+from vocab import Vocab
+
+
+# Change this for 2D + 1D stf type
 
 class GR_dataset():
     def __init__(self, split, load, batch_size, stf_type=STF_TYPE):

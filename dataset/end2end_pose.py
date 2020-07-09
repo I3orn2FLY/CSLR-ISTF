@@ -2,10 +2,10 @@ import torch
 import numpy as np
 
 from dataset.end2end_base import End2EndDataset, random_skip, down_sample
-from utils import Vocab
+from vocab import Vocab
 
 from config import *
-from common import get_video_path
+from utils import get_video_path
 
 
 # TODO implement loading pose data and generate stf feats from 1d cnns maybe new code for stf_feats is needed
@@ -40,8 +40,8 @@ def process_video_pose(video_pose, augment_frame=True):
 
 class End2EndPoseDataset(End2EndDataset):
     def __init__(self, vocab, split, max_batch_size, augment_frame=True, augment_temp=True):
-        if (not STF_MODEL.startswith("pose")) or SRC_MODE == "HAND" or (not USE_STF_FEAT):
-            print("Incorrect params => ", STF_MODEL, SRC_MODE, "USE_FEAT:", USE_STF_FEAT)
+        if (not STF_MODEL.startswith("pose")) or SRC_MODE == "HAND" or (not USE_ST_FEAT):
+            print("Incorrect params => ", STF_MODEL, SRC_MODE, "USE_FEAT:", USE_ST_FEAT)
             exit(0)
         super(End2EndPoseDataset, self).__init__(vocab, split, max_batch_size, augment_frame, augment_temp)
 

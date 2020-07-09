@@ -6,10 +6,10 @@ import pickle
 from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
-from utils import ProgressPrinter, Vocab
-from common import predict_glosses
+from utils import ProgressPrinter
+from vocab import Vocab, predict_glosses
 from dataset import get_end2end_datasets
-from models import get_end2end_model
+from models import get_end2end_model, STF_2D
 
 from config import *
 
@@ -40,11 +40,7 @@ def phase_path(path, phase):
     return os.path.join(dir, filename)
 
 
-def save_end2end_model(model, phase, best_wer, use_feat):
-    model_dir = os.path.split(STF_MODEL_PATH)[0]
-    if not os.path.exists(model_dir):
-        os.makedirs(model_dir)
-
+def save_end2end_model(model, phase, best_wer):
     model_dir = os.path.split(STF_MODEL_PATH)[0]
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
@@ -56,9 +52,15 @@ def save_end2end_model(model, phase, best_wer, use_feat):
     with open(phase_path(END2END_WER_PATH, phase), 'w') as f:
         f.write(str(best_wer) + "\n")
 
-    if not use_feat:
-        torch.save(model.stf.state_dict(), phase_path(STF_MODEL_PATH, phase))
     torch.save(model.seq2seq.state_dict(), phase_path(SEQ2SEQ_MODEL_PATH, phase))
+    if model.stf_type == 0:
+        if model.use_img_feat and model.use_st_feat:
+            stf = STF_2D(False)
+            stf.temporal_feat_m = model.stf.temporal_feat_m
+            torch.save(stf.state_dict(), phase_path(STF_MODEL_PATH, phase))
+    elif not model.use_st_feat:
+        torch.save(model.stf.state_dict(), phase_path(STF_MODEL_PATH, phase))
+
     print("   ", "Model Saved")
 
 
@@ -97,7 +99,7 @@ def train_end2end(model, vocab, datasets, use_feat):
                 gts = []
 
                 with torch.set_grad_enabled(phase == "train"):
-                    pp = ProgressPrinter(n_batches, 25 if USE_STF_FEAT else 1)
+                    pp = ProgressPrinter(n_batches, 25 if USE_ST_FEAT else 1)
                     for i in range(n_batches):
                         optimizer.zero_grad()
                         X_batch, Y_batch, Y_lens = dataset.get_batch(i)
@@ -145,7 +147,7 @@ def train_end2end(model, vocab, datasets, use_feat):
 
                 if phase_wer < best_wer[phase]:
                     best_wer[phase] = phase_wer
-                    save_end2end_model(model, phase, best_wer[phase], use_feat=use_feat)
+                    save_end2end_model(model, phase, best_wer[phase])
 
                 if phase == "val":
                     if phase_wer < current_best_wer:
@@ -173,8 +175,8 @@ def train_end2end(model, vocab, datasets, use_feat):
 if __name__ == "__main__":
     vocab = Vocab()
 
-    model, _ = get_end2end_model(vocab, END2END_MODEL_LOAD, END2END_MODEL_LOAD, STF_TYPE, USE_STF_FEAT)
+    model, _ = get_end2end_model(vocab, END2END_MODEL_LOAD, STF_TYPE, USE_ST_FEAT)
     datasets = get_end2end_datasets(vocab)
-    best_wer, trained = train_end2end(model, vocab, datasets, USE_STF_FEAT)
+    best_wer, trained = train_end2end(model, vocab, datasets, USE_ST_FEAT)
 
     print("\nEnd2End training complete:", "Best WER:", best_wer, "Finished:", trained)
