@@ -1,3 +1,6 @@
+from config import *
+
+
 class Vocab(object):
     def __init__(self):
         self.idx2gloss = ["-"]

@@ -54,7 +54,7 @@ def save_end2end_model(model, phase, best_wer):
 
     torch.save(model.seq2seq.state_dict(), phase_path(SEQ2SEQ_MODEL_PATH, phase))
     if model.stf_type == 0:
-        if model.use_img_feat and model.use_st_feat:
+        if model.use_img_feat and not model.use_st_feat:
             stf = STF_2D(False)
             stf.temporal_feat_m = model.stf.temporal_feat_m
             torch.save(stf.state_dict(), phase_path(STF_MODEL_PATH, phase))
@@ -176,7 +176,7 @@ if __name__ == "__main__":
     vocab = Vocab()
 
     model, _ = get_end2end_model(vocab, END2END_MODEL_LOAD, STF_TYPE, USE_ST_FEAT)
-    datasets = get_end2end_datasets(vocab)
+    datasets = get_end2end_datasets(model, vocab)
     best_wer, trained = train_end2end(model, vocab, datasets, USE_ST_FEAT)
 
     print("\nEnd2End training complete:", "Best WER:", best_wer, "Finished:", trained)

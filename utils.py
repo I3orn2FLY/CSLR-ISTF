@@ -69,10 +69,11 @@ def get_video_path(row, split, stf_feat=True, feat_ext=".pt"):
 
 
 def check_stf_features(img_feat=False):
-    for split in ["train, dev", "test"]:
+    print(SOURCE, STF_MODEL, "checking features...")
+    for split in ["train", "dev", "test"]:
+
         df = get_split_df(split)
 
-        print(SOURCE, STF_MODEL, "feature extraction:", split, "split")
         L = df.shape[0]
 
         count = 0
@@ -87,4 +88,4 @@ def check_stf_features(img_feat=False):
         if count / L > 0.05:
             return False
 
-    return os.path.exists(STF_MODEL_PATH)
+    return os.path.exists(STF_MODEL_PATH) or img_feat

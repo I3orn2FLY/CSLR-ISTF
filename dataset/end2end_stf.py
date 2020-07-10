@@ -11,6 +11,9 @@ class End2EndSTFDataset(End2EndDataset):
     def __init__(self, vocab, split, max_batch_size, augment_frame=True, augment_temp=True):
         super(End2EndSTFDataset, self).__init__(vocab, split, max_batch_size, augment_frame, augment_temp)
 
+    def _get_ffm(self):
+        return os.path.join("ST_FEAT", STF_MODEL + "_" + str(IMG_FEAT_SIZE))
+
     def _get_feat(self, row, glosses=None):
         video_path, feat_path = get_video_path(row, self.split)
 

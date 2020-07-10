@@ -1,14 +1,14 @@
 from dataset.gr import GR_dataset
 from dataset.end2end_base import End2EndDataset
-from dataset.end2end_pose import End2EndPoseDataset
+from dataset.end2end_img_feat import End2EndImgFeatDataset
 from dataset.end2end_stf import End2EndSTFDataset
 from dataset.end2end_raw import End2EndRawDataset
 
 from config import *
 
 
-def get_end2end_datasets(vocab, use_feat=USE_ST_FEAT, include_test=False):
-    if use_feat:
+def get_end2end_datasets(model, vocab, include_test=False):
+    if model.use_st_feat:
         batch_size = END2END_STF_BATCH_SIZE
     else:
         batch_size = END2END_RAW_BATCH_SIZE
@@ -16,15 +16,10 @@ def get_end2end_datasets(vocab, use_feat=USE_ST_FEAT, include_test=False):
     args = {"vocab": vocab, "split": "train", "max_batch_size": batch_size,
             "augment_temp": END2END_DATA_AUG_TEMP, "augment_frame": END2END_DATA_AUG_FRAME}
 
-    if use_feat:
-        if STF_MODEL.startswith("pose"):
-            dataset_class = End2EndPoseDataset
-        elif STF_MODEL.startswith("resnet{2+1}d"):
-            dataset_class = End2EndSTFDataset
-        else:
-            dataset_class = End2EndDataset
-            print("Not implemented", STF_MODEL, STF_TYPE)
-            exit(0)
+    if model.use_st_feat:
+        dataset_class = End2EndSTFDataset
+    elif model.use_img_feat:
+        dataset_class = End2EndImgFeatDataset
     else:
         dataset_class = End2EndRawDataset
 

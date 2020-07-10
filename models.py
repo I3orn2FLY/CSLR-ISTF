@@ -78,8 +78,8 @@ class SLR(nn.Module):
                 exit(0)
 
         self.stf_type = stf_type
-        self.use_st_feat = USE_ST_FEAT
-        self.use_img_feat = USE_ST_FEAT
+        self.use_st_feat = use_st_feat
+        self.use_img_feat = use_img_feat
         self.seq2seq = BiLSTM(rnn_hidden, vocab_size)
 
     def forward(self, x, x_lengths=None):
@@ -166,6 +166,7 @@ def get_end2end_model(vocab, load_seq, stf_type, use_st_feat):
             if check_stf_features(img_feat=True):
                 print("Initializing with Image_Features")
                 use_img_feat = True
+                use_st_feat = False
             else:
                 use_img_feat = False
                 print("Can not use Img features, they are missing! (that's it boy)")
@@ -179,16 +180,23 @@ def get_end2end_model(vocab, load_seq, stf_type, use_st_feat):
                 use_st_feat=use_st_feat, use_img_feat=use_img_feat,
                 stf_type=stf_type).to(DEVICE)
 
-    if stf_type == 0 and use_img_feat and not use_st_feat:
-        if os.path.exists(STF_MODEL_PATH):
-            stf = STF_2D(False)
-            stf.load_state_dict(torch.load(STF_MODEL_PATH, map_location=DEVICE))
-            model.stf.temporal_feat_m = stf.temporal_feat_m
-    fully_loaded = use_st_feat
+    fully_loaded = False
     if os.path.exists(STF_MODEL_PATH) and not use_st_feat:
-        model.stf.load_state_dict(torch.load(STF_MODEL_PATH, map_location=DEVICE))
-        print("STF model Loaded")
-        fully_loaded = True
+        if stf_type == 0:
+            if use_img_feat:
+                stf = STF_2D(False).to(DEVICE)
+                stf.load_state_dict(torch.load(STF_MODEL_PATH, map_location=DEVICE))
+                model.stf.temporal_feat_m = stf.temporal_feat_m
+                print("Temporal Features model Loaded")
+                fully_loaded = True
+            else:
+                model.stf.load_state_dict(torch.load(STF_MODEL_PATH, map_location=DEVICE))
+                print("Spatiotemporal Features model Loaded")
+                fully_loaded = True
+        else:
+            model.stf.load_state_dict(torch.load(STF_MODEL_PATH, map_location=DEVICE))
+            print("Spatiotemporal Features model Loaded")
+            fully_loaded = True
 
     if os.path.exists(SEQ2SEQ_MODEL_PATH) and load_seq:
         model.seq2seq.load_state_dict(torch.load(SEQ2SEQ_MODEL_PATH, map_location=DEVICE))
