@@ -92,14 +92,14 @@ class SLR(nn.Module):
 
 
 class GR(nn.Module):
-    def __init__(self, vocab_size, use_feat=USE_ST_FEAT, temp_fusion_type=1):
+    def __init__(self, vocab_size, use_feat=USE_ST_FEAT, stf_type=STF_TYPE):
         super(GR, self).__init__()
-        if temp_fusion_type == 0:
+        if stf_type == 0:
             self.stf = STF_2D(use_feat=use_feat)
-        elif temp_fusion_type == 1:
+        elif stf_type == 1:
             self.stf = STF_2Plus1D()
         else:
-            print("Incorrect temporal fusion type", temp_fusion_type)
+            print("Incorrect temporal fusion type", stf_type)
             exit(0)
 
         self.fc = nn.Linear(IMG_FEAT_SIZE * 2, vocab_size)
