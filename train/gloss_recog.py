@@ -114,6 +114,6 @@ def train_gloss_recog(model, datasets):
 if __name__ == "__main__":
     vocab = Vocab()
     model = get_GR_model(vocab)
-    datasets = get_gr_datasets()
+    datasets = get_gr_datasets(load=True)
     best_acc, trained = train_gloss_recog(model, datasets)
     print("\nTraining complete:", "Best ACC:", best_acc, "Finished:", trained)

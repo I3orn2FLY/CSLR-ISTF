@@ -21,7 +21,7 @@ class GR_dataset():
 
         self.batches = [[]]
 
-        self.stf_type = STF_TYPE
+        self.stf_type = stf_type
         self.build_dataset(split, load)
 
     def build_dataset(self, split, load):
