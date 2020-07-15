@@ -8,7 +8,7 @@ from config import *
 
 
 def get_end2end_datasets(model, vocab, include_test=False):
-    if model.use_st_feat:
+    if model.use_st_feat or model.use_img_feat:
         batch_size = END2END_STF_BATCH_SIZE
     else:
         batch_size = END2END_RAW_BATCH_SIZE
