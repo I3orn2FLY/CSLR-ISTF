@@ -212,7 +212,7 @@ def get_GR_model(vocab):
 
     if os.path.exists(STF_MODEL_PATH):
         model.stf.load_state_dict(torch.load(STF_MODEL_PATH, map_location=DEVICE))
-        print("Temp fusion model Loaded")
+        print("Spatiotemporal Feature Extractor Loaded")
     else:
         print("Temp fusion model doesnt exist")
         exit(0)

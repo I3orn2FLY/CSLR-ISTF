@@ -72,6 +72,8 @@ def train_gloss_recog(model, datasets):
                         optimizer.zero_grad()
 
                     X_batch, Y_batch = dataset.get_batch(i)
+                    if X_batch.size(1) != 8 and STF_TYPE == 0:
+                        continue
 
                     X_batch = X_batch.to(DEVICE)
                     Y_batch = Y_batch.to(DEVICE)

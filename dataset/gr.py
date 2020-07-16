@@ -7,6 +7,7 @@ import torch
 import pandas as pd
 
 from utils import ProgressPrinter
+from processing_tools import preprocess_3d, preprocess_2d
 from vocab import Vocab
 
 
@@ -89,10 +90,10 @@ class GR_dataset():
             y1, x1 = int(0.2 * np.random.rand() * h), int(0.2 * np.random.rand() * h)
             y2, x2 = h - int(0.2 * np.random.rand() * h), w - int(0.2 * np.random.rand() * h)
             img = img[y1:y2, x1:x2]
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            img = cv2.resize(img, (IMG_SIZE_2Plus1D, IMG_SIZE_2Plus1D))
-            img = img.astype(np.float32) / 255
-            img = (img - self.mean) / self.std
+            if self.stf_type == 1:
+                img = preprocess_3d(img)
+            else:
+                img = preprocess_2d(img)
             images.append(img)
 
         x = np.stack(images)
@@ -152,16 +153,20 @@ class GR_dataset():
 
 if __name__ == "__main__":
     vocab = Vocab()
-
-    ls = list(glob.glob(GR_VIDEOS_DIR + "/*"))
+    # with open("/media/kenny/Extra/VARS/CSLR-ISTF/PH/FULL/GEN_DATA/DATASETS/GR/VARS/X_train.pkl", "wb") as f:
+    #     print()
+    # ls = list(glob.glob(GR_VIDEOS_DIR + "/*"))
 
     # print(len(ls))
-    # gr_train = GR_dataset("train", False, 64)
-    #
-    # n = gr_train.start_epoch()
-    #
+    gr_train = GR_dataset("train", True, 64)
+
+    n = gr_train.start_epoch()
+    X_batch, Y_batch = gr_train.get_batch(0)
+
+    print(X_batch.shape, Y_batch.shape)
+
     # pp = ProgressPrinter(n, 5)
-    #
+
     # lengths = {}
     # for i in range(n):
     #     X_batch, Y_batch = gr_train.get_batch(i)
