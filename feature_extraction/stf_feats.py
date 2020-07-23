@@ -7,22 +7,16 @@ from config import *
 
 
 def generate_stf_feats(stf_model=STF_MODEL):
+    if not os.path.exists(STF_MODEL_PATH):
+        print("STF model doesnt exist:", STF_MODEL_PATH)
+        exit(0)
+
     if stf_model.startswith("densenet") or stf_model.startswith("googlenet"):
         mode = "2D"
         model = STF_2D().to(DEVICE)
         preprocess = preprocess_2d
-        if not (os.path.exists(STF_MODEL_PATH) or os.path.exists(TF_MODEL_PATH)):
-            print("STF model doesnt exist:", STF_MODEL_PATH)
-            exit(0)
-        elif os.path.exists(STF_MODEL_PATH):
-            model.load_state_dict(torch.load(STF_MODEL_PATH, map_location=DEVICE))
-        else:
-            model.temporal_feat_m.load_state_dict(torch.load(TF_MODEL_PATH, map_location=DEVICE))
 
     elif stf_model.startswith("resnet{2+1}d"):
-        if not os.path.exists(STF_MODEL_PATH):
-            print("STF model doesnt exist:", STF_MODEL_PATH)
-            exit(0)
         mode = "3D"
         model = STF_2Plus1D().to(DEVICE)
         preprocess = preprocess_3d
@@ -34,6 +28,7 @@ def generate_stf_feats(stf_model=STF_MODEL):
         print("Incorrect feature extraction model:", stf_model)
         exit(0)
 
+    model.load_state_dict(torch.load(STF_MODEL_PATH, map_location=DEVICE))
     model.eval()
     print(SOURCE, stf_model, "SpatioTemporal feature extraction...")
     with torch.no_grad():
@@ -67,13 +62,8 @@ def gen_stf_feats_split(model, preprocess, split, mode):
             continue
 
         tensor_video = get_tensor_video(images, preprocess, mode)
-        if mode == "2D":
-            inp = tensor_video.to(DEVICE)
-            feat = model(inp).cpu()
-        else:
-            inp = tensor_video.unsqueeze(0).to(DEVICE)
-            feat = model(inp).squeeze(0).cpu()
-
+        inp = tensor_video.unsqueeze(0).to(DEVICE)
+        feat = model(inp).squeeze(0).cpu()
         if not os.path.exists(feat_dir):
             os.makedirs(feat_dir)
 
