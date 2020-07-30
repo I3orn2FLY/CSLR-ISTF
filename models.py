@@ -92,10 +92,10 @@ class SLR(nn.Module):
 
 
 class GR(nn.Module):
-    def __init__(self, vocab_size, use_feat=USE_ST_FEAT, stf_type=STF_TYPE):
+    def __init__(self, vocab_size, stf_type=STF_TYPE):
         super(GR, self).__init__()
         if stf_type == 0:
-            self.stf = STF_2D(use_feat=use_feat)
+            self.stf = STF_2D()
         elif stf_type == 1:
             self.stf = STF_2Plus1D()
         else:
@@ -180,7 +180,7 @@ def get_end2end_model(vocab, load_seq, stf_type, use_st_feat):
                 use_st_feat=use_st_feat, use_img_feat=use_img_feat,
                 stf_type=stf_type).to(DEVICE)
 
-    fully_loaded = False
+    fully_loaded = use_st_feat
     if os.path.exists(STF_MODEL_PATH) and not use_st_feat:
         if stf_type == 0:
             if use_img_feat:
