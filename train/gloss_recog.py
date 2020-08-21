@@ -40,7 +40,6 @@ def save_model(model, best_loss):
 
 def train_gloss_recog(model, datasets):
     print("GR model training...")
-    print("Mode:", SRC_MODE)
     print("Features:", STF_MODEL)
     best_loss = float("inf")
     optimizer = Adam(model.parameters(), lr=GR_LR)

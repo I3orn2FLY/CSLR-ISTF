@@ -66,7 +66,6 @@ def save_end2end_model(model, phase, best_wer):
 
 def train_end2end(model, vocab, datasets, use_feat):
     print("END2END model training...")
-    print("Mode:", SRC_MODE)
     print("Features:", STF_MODEL)
     print("Save Model path:", STF_MODEL_PATH)
     print("WER path:", END2END_WER_PATH)

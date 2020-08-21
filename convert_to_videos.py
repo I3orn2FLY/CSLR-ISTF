@@ -1,7 +1,7 @@
 import glob
 import os
 import cv2
-from config import SRC_MODE, PH_DIR, VIDEOS_DIR
+from config import PH_DIR, VIDEOS_DIR
 from utils import ProgressPrinter
 
 
@@ -11,8 +11,6 @@ from utils import ProgressPrinter
 def convert_phoenix_to_videos():
     if SRC_MODE == "FULL":
         ph_images_dir = os.sep.join([PH_DIR, "features", "fullFrame-210x260px"])
-    elif SRC_MODE == "HAND":
-        ph_images_dir = os.sep.join([PH_DIR, "features", "trackedRightHand-92x132px"])
     else:
         ph_images_dir = None
         exit(0)
@@ -20,7 +18,7 @@ def convert_phoenix_to_videos():
     video_dirs = list(glob.glob(os.sep.join([ph_images_dir, '*', '*', '1'])))
 
     pp = ProgressPrinter(len(video_dirs), 5)
-    print("Converting Images into Videos", SRC_MODE)
+    print("Converting Images into Videos")
     for idx, video_dir in enumerate(video_dirs):
         image_paths = sorted(list(glob.glob(os.path.join(video_dir, "*.png"))))
         video_path = os.path.split(video_dir)[0] + ".mp4"
@@ -33,10 +31,8 @@ def convert_phoenix_to_videos():
             os.makedirs(video_dir)
 
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        if SRC_MODE == "FULL":
-            shape = (210, 260)
-        else:
-            shape = (92, 132)
+
+        shape = (210, 260)
 
         out = cv2.VideoWriter(video_path, fourcc, 25.0, shape)
         for im in image_paths:
