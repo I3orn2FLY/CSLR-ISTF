@@ -6,6 +6,8 @@ import pickle
 from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
+import sys
+sys.path.append("..")
 from utils import ProgressPrinter
 from vocab import Vocab, predict_glosses
 from dataset import get_end2end_datasets

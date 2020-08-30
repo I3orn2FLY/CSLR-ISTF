@@ -20,25 +20,26 @@ def gen_KRSL_annotation():
         return P, S, R
 
     def get_anno_and_avoid_list():
-        df = pd.read_csv(os.path.join(ANNO_DIR, "annotation.csv"), header=None)
+        def preprocess_sentence(sent):
+            return " ".join(sent.strip().replace(',', '').replace("(вопрос)", '').lower().split())
+
+        df = pd.read_csv(os.path.join(ANNO_DIR, "annotation.csv"), sep="|")
+
+        # df.to_csv(os.path.join(ANNO_DIR, "annotation.csv"), sep="|")
         avoid_list = []
         vocab = set()
-        with open(os.path.join(ANNO_DIR, "176_phrases"), 'r') as f:
-            anno = {}
-            for line in f.readlines():
-                sent = line.strip().replace(',', '').lower().split()
 
-                idx = int(sent[0])
-                gloss = " ".join(df.iloc[idx][1].strip().replace(',', '').replace("(вопрос)", '').lower().split())
+        anno = []
+        for idx in range(df.shape[0]):
+            trans = preprocess_sentence(df.iloc[idx]["Translation"])
+            gloss = preprocess_sentence(df.iloc[idx]["Recognition"])
 
-                trans = " ".join(df.iloc[idx][0].strip().lower().split())
-
-                if '(' in gloss:
-                    avoid_list.append(idx)
-                else:
-                    for word in gloss.split():
-                        vocab.add(word)
-                anno[int(sent[0])] = (gloss, trans)
+            if '(' in gloss:
+                avoid_list.append(idx)
+            else:
+                for word in gloss.split():
+                    vocab.add(word)
+            anno.append((gloss, trans))
 
         with open(os.path.join(ANNO_DIR, "vocabulary.txt"), 'w') as f:
             for word in sorted(list(vocab)):
@@ -152,3 +153,7 @@ def gen_KRSL_annotation():
     gen_anno_split(data_train, "train", anno)
     gen_anno_split(data_val, "val", anno)
     gen_anno_split(data_test, "test", anno)
+
+
+if __name__ == "__main__":
+    gen_KRSL_annotation()

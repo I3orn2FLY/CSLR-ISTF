@@ -1,5 +1,6 @@
 import torch
-
+import sys
+sys.path.append("..")
 from processing_tools import preprocess_2d, preprocess_3d, get_images, get_tensor_video
 from utils import ProgressPrinter, get_video_path, get_split_df
 from models import STF_2D, STF_2Plus1D
@@ -7,7 +8,7 @@ from config import *
 
 
 def generate_stf_feats(stf_model=STF_MODEL):
-    if not os.path.exists(STF_MODEL_PATH):
+    if not os.path.exists(STF_MODEL_PATH) and not stf_model.startswith("resnet{2+1}d"):
         print("STF model doesnt exist:", STF_MODEL_PATH)
         exit(0)
 
@@ -20,7 +21,7 @@ def generate_stf_feats(stf_model=STF_MODEL):
         mode = "3D"
         model = STF_2Plus1D().to(DEVICE)
         preprocess = preprocess_3d
-        model.load_state_dict(torch.load(STF_MODEL_PATH, map_location=DEVICE))
+
     else:
         model = None
         preprocess = None
@@ -28,7 +29,10 @@ def generate_stf_feats(stf_model=STF_MODEL):
         print("Incorrect feature extraction model:", stf_model)
         exit(0)
 
-    model.load_state_dict(torch.load(STF_MODEL_PATH, map_location=DEVICE))
+    if os.path.exists(STF_MODEL_PATH):
+        model.load_state_dict(torch.load(STF_MODEL_PATH, map_location=DEVICE))
+    else:
+        print("Model not Loaded")
     model.eval()
     print(SOURCE, stf_model, "SpatioTemporal feature extraction...")
     with torch.no_grad():

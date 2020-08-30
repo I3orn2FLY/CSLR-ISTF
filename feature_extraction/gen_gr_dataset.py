@@ -3,6 +3,9 @@ import cv2
 import torch
 import numpy as np
 import pandas as pd
+
+import sys
+sys.path.append("..")
 from config import *
 from models import get_end2end_model
 from utils import ProgressPrinter, get_video_path, get_split_df
