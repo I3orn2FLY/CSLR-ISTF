@@ -1,4 +1,7 @@
 import torch
+import sys
+
+sys.path.append("..")
 from config import *
 from models import get_end2end_model
 from vocab import Vocab

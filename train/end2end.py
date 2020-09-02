@@ -5,14 +5,13 @@ import Levenshtein as Lev
 import pickle
 from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-
 import sys
+
 sys.path.append("..")
 from utils import ProgressPrinter
 from vocab import Vocab, predict_glosses
 from dataset import get_end2end_datasets
 from models import get_end2end_model, STF_2D
-
 from config import *
 
 np.random.seed(0)

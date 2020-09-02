@@ -3,7 +3,9 @@ import torch.nn as nn
 import numpy as np
 from numpy import random
 from torch.optim import Adam
+import sys
 
+sys.path.append("..")
 from utils import ProgressPrinter
 from vocab import Vocab
 from dataset import get_gr_datasets

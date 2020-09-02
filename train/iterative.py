@@ -1,6 +1,10 @@
 import torch
 import pickle
 import shutil
+
+import sys
+
+sys.path.append("..")
 from feature_extraction.stf_feats import generate_stf_feats
 from models import get_end2end_model, get_GR_model
 from dataset import get_gr_datasets, get_end2end_datasets

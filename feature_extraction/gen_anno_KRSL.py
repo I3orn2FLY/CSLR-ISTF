@@ -4,7 +4,7 @@ import glob
 import numpy as np
 import pandas as pd
 
-sys.path.append(".." + os.sep)
+sys.path.append("..")
 
 from config import ANNO_DIR, VIDEOS_DIR
 

@@ -1,5 +1,6 @@
-import multiprocessing as mp
+import sys
 
+sys.path.append("..")
 from dataset.end2end_base import *
 
 from processing_tools import get_images, preprocess_2d, preprocess_3d

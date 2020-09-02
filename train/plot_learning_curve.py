@@ -4,7 +4,9 @@ import sys
 import pickle
 import numpy as np
 
-sys.path.append(".." + os.sep)
+import sys
+
+sys.path.append("..")
 from config import *
 
 if __name__ == "__main__":

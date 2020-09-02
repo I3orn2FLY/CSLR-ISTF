@@ -3,6 +3,9 @@ import sys
 import numpy as np
 import cv2
 from utils import ProgressPrinter, get_split_df, get_video_path
+import sys
+
+sys.path.append("..")
 from config import *
 
 sys.path.append(os.path.join(OPENPOSE_FOLDER, "build/python"))

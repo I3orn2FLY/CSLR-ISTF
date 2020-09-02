@@ -1,4 +1,7 @@
 import torch
+import sys
+
+sys.path.append("..")
 from processing_tools import preprocess_2d, get_images, get_tensor_video
 from utils import ProgressPrinter, get_video_path, get_split_df
 from models import ImgFeat

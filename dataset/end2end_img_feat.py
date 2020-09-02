@@ -1,6 +1,8 @@
 import torch
 import numpy as np
+import sys
 
+sys.path.append("..")
 from dataset.end2end_base import End2EndDataset, random_skip, down_sample
 
 from config import *

@@ -1,7 +1,9 @@
 import pickle
 import torch
 import numpy as np
+import sys
 
+sys.path.append("..")
 from config import *
 from utils import get_split_df, ProgressPrinter
 
