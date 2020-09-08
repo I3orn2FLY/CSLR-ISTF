@@ -2,8 +2,7 @@ import time
 from config import *
 import pandas as pd
 import os
-import warnings
-warnings.filterwarnings("ignore")
+
 
 class ProgressPrinter():
     def __init__(self, L, step):

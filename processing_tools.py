@@ -2,7 +2,7 @@ from config import *
 import torch
 import numpy as np
 import cv2
-
+import warnings
 
 def preprocess_img(img, mean, std):
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -29,19 +29,20 @@ def preprocess_3d(img):
 
 
 def get_images(video_path, size=None):
-    images = []
-    cap = cv2.VideoCapture(video_path)
-    while True:
-        ret, img = cap.read()
-        if not ret:
-            break
+    with warnings.catch_warnings():
+        images = []
+        cap = cv2.VideoCapture(video_path)
+        while True:
+            ret, img = cap.read()
+            if not ret:
+                break
 
-        if size is not None:
-            img = cv2.resize(img, size)
-        images.append(img)
-    cap.release()
+            if size is not None:
+                img = cv2.resize(img, size)
+            images.append(img)
+        cap.release()
 
-    return images
+        return images
 
 
 def get_tensor_video(images, preprocess, mode):
