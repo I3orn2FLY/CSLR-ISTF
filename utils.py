@@ -33,10 +33,11 @@ class ProgressPrinter():
         print("\r" + something + "Progress: %.2f" % (cur_idx * 100 / self.L) + "% "
               + str(hours) + " hours "
               + str(minutes) + " minutes "
-              + str(seconds) + " seconds left", end=" ")
+              + str(seconds) + " seconds left", flush=True, end=" ")
 
     def end(self, something=""):
-        print("\r" + something + "Progress: 100%")
+        print("\r" + something + "Progress: 100%", flush=True)
+
 
 
 def get_split_df(split):
