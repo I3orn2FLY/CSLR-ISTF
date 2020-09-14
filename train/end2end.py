@@ -176,7 +176,7 @@ if __name__ == "__main__":
     vocab = Vocab()
 
     model, _ = get_end2end_model(vocab, END2END_MODEL_LOAD, STF_TYPE, USE_ST_FEAT)
-    datasets = get_end2end_datasets(model, vocab)
+    datasets = get_end2end_datasets(model, vocab, load=False)
     best_wer, trained = train_end2end(model, vocab, datasets, USE_ST_FEAT)
 
     print("\nEnd2End training complete:", "Best WER:", best_wer, "Finished:", trained)

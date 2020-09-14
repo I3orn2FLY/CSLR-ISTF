@@ -39,8 +39,8 @@ def process_video_pose(video_pose, augment_frame=True):
 
 
 class End2EndImgFeatDataset(End2EndDataset):
-    def __init__(self, vocab, split, max_batch_size, augment_frame=True, augment_temp=True):
-        super(End2EndImgFeatDataset, self).__init__(vocab, split, max_batch_size, augment_frame, augment_temp)
+    def __init__(self, vocab, split, max_batch_size, augment_frame=True, augment_temp=True, load=True):
+        super(End2EndImgFeatDataset, self).__init__(vocab, split, max_batch_size, augment_frame, augment_temp, load)
 
     def _get_ffm(self):
         return os.path.join("IMG_FEAT", STF_MODEL + "_" + str(IMG_FEAT_SIZE))

@@ -50,7 +50,7 @@ def noise_video(video):
 
 
 class End2EndDataset():
-    def __init__(self, vocab, split, max_batch_size, augment_frame=True, augment_temp=True):
+    def __init__(self, vocab, split, max_batch_size, augment_frame=True, augment_temp=True, load=True):
         if split == "train":
             self.augment_temp = augment_temp
             self.augment_frame = augment_frame
@@ -59,6 +59,7 @@ class End2EndDataset():
             self.augment_frame = False
 
         self.max_batch_size = max_batch_size
+        self.load = load
 
         if SOURCE == "PH" and split == "val":
             split = "dev"
@@ -87,7 +88,7 @@ class End2EndDataset():
         Y_path = os.sep.join([dataset_dir, "Y_" + self.split + ".pkl"])
         X_lens_path = os.sep.join([dataset_dir, "X_lens_" + self.split + ".pkl"])
 
-        if os.path.exists(X_path) and os.path.exists(Y_path) and os.path.exists(X_lens_path):
+        if os.path.exists(X_path) and os.path.exists(Y_path) and os.path.exists(X_lens_path) and self.load:
             with open(X_path, 'rb') as f:
                 self.X = pickle.load(f)
 
