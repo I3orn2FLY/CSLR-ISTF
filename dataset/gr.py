@@ -11,10 +11,10 @@ from processing_tools import preprocess_3d, preprocess_2d
 from vocab import Vocab
 
 
-# Change this for 2D + 1D stf type
+# TODO update GR dataset without csv files
 
 class GR_dataset():
-    def __init__(self, split, load, batch_size, stf_type=STF_TYPE):
+    def __init__(self, split, batch_size, stf_type=STF_TYPE):
 
         self.batch_size = batch_size
         self.mean = np.array([0.43216, 0.394666, 0.37645], dtype=np.float32)
@@ -23,62 +23,31 @@ class GR_dataset():
         self.batches = [[]]
 
         self.stf_type = stf_type
-        self.build_dataset(split, load)
+        self.load_dataset(split)
 
-    def build_dataset(self, split, load):
+    def load_dataset(self, split):
+        data_path = os.sep.join([GR_DATASET_DIR, "VARS", "data.pkl"])
+        if os.path.exists(data_path):
+            with open(data_path, 'rb') as f:
+                data = pickle.load(f)
 
-        prefix_dir = os.path.join(GR_DATASET_DIR, "VARS")
+            X = data["X"]
+            Y = data["Y"]
+            X_lens = data["X_lens"]
+            idxs = data["idxs"]
 
-        X_path = os.sep.join([prefix_dir, "X_" + split + ".pkl"])
-        Y_path = os.sep.join([prefix_dir, "Y_" + split + ".pkl"])
-        X_lens_path = os.sep.join([prefix_dir, "X_lens_" + split + ".pkl"])
+            if split == "train":
+                idxs = idxs[:int(0.9 * len(X))]
+            else:
+                idxs = idxs[int(0.9 * len(X)):]
 
-        if load and os.path.exists(X_path) and os.path.exists(Y_path) and os.path.exists(X_lens_path):
-            with open(X_path, 'rb') as f:
-                self.X = pickle.load(f)
-
-            with open(Y_path, 'rb') as f:
-                self.Y = pickle.load(f)
-
-            with open(X_lens_path, 'rb') as f:
-                self.X_lens = pickle.load(f)
+            self.X = [X[idx] for idx in idxs]
+            self.Y = [Y[idx] for idx in idxs]
+            self.X_lens = [X_lens[idx] for idx in idxs]
 
             print("GR", split, "dataset loaded")
-            return
-
-        print("Building GR", split, "dataset")
-        df = pd.read_csv(os.path.join(GR_ANNO_DIR, "gloss_" + split + ".csv"))
-        self.X = []
-        self.X_lens = []
-        self.Y = []
-        pp = ProgressPrinter(df.shape[0], 25)
-        for i in range(df.shape[0]):
-            row = df.iloc[i]
-            video_dir = os.path.join(GR_VIDEOS_DIR, row.folder)
-            image_files = list(glob.glob(video_dir))
-            image_files.sort()
-
-            self.X.append(image_files)
-            self.X_lens.append(len(image_files))
-            self.Y.append(int(row.gloss_idx))
-
-            if SHOW_PROGRESS:
-                pp.show(i)
-
-        if SHOW_PROGRESS:
-            pp.end()
-
-        if not os.path.exists(prefix_dir):
-            os.makedirs(prefix_dir)
-
-        with open(X_path, 'wb') as f:
-            pickle.dump(self.X, f)
-
-        with open(Y_path, 'wb') as f:
-            pickle.dump(self.Y, f)
-
-        with open(X_lens_path, 'wb') as f:
-            pickle.dump(self.X_lens, f)
+        else:
+            raise ValueError("GR Dataset not generated!")
 
     def get_sample(self, i):
         y = self.Y[i]
@@ -153,57 +122,9 @@ class GR_dataset():
 
 if __name__ == "__main__":
     vocab = Vocab()
-    # with open("/media/kenny/Extra/VARS/CSLR-ISTF/PH/FULL/GEN_DATA/DATASETS/GR/VARS/X_train.pkl", "wb") as f:
-    #     print()
-    # ls = list(glob.glob(GR_VIDEOS_DIR + "/*"))
-
-    # print(len(ls))
-    gr_train = GR_dataset("train", True, 64)
+    gr_train = GR_dataset("train", 64, 0)
 
     n = gr_train.start_epoch()
     X_batch, Y_batch = gr_train.get_batch(0)
 
     print(X_batch.shape, Y_batch.shape)
-
-    # pp = ProgressPrinter(n, 5)
-
-    # lengths = {}
-    # for i in range(n):
-    #     X_batch, Y_batch = gr_train.get_batch(i)
-    #     L = X_batch.size(2)
-    #     lengths[L] = lengths.get(L, 0) + 1
-    #     pp.show(i)
-    # pp.end()
-    # print(lengths)
-
-    # df = pd.read_csv(os.path.join(GR_ANNO_DIR, "gloss_" + split + ".csv"))
-    #
-    # pp = ProgressPrinter(df.shape[0], 25)
-    # for i in range(df.shape[0]):
-    #     row = df.iloc[i]
-    #     video_dir = os.path.join(GR_VIDEOS_DIR, row.folder)
-    #     image_files = list(glob.glob(video_dir))
-    #     image_files.sort()
-    #
-    #     if SHOW_PROGRESS:
-    #         pp.show(i)
-
-# gr_train.start_epoch()
-# idxs = gr_train.batches[0]
-# X_batch, Y_batch = gr_train.get_batch(0)
-# X_batch = X_batch.numpy()
-# print(idxs)
-# X_batch = X_batch.transpose([0, 2, 3, 4, 1])
-# mean = np.array([0.43216, 0.394666, 0.37645], dtype=np.float32)
-# std = np.array([0.22803, 0.22145, 0.216989], dtype=np.float32)
-#
-# for vid in X_batch:
-#     vid = (vid * std + mean) * 255
-#     vid = vid.astype(np.uint8)
-#     for image in vid:
-#         image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-#         cv2.imshow("window", image)
-#         if cv2.waitKey(0) == 27:
-#             exit(0)
-#
-# print(X_batch.shape)

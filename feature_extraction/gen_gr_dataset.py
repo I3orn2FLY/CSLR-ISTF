@@ -16,8 +16,8 @@ from vocab import Vocab, force_alignment
 
 
 def get_gloss_paths(images, pad_image, gloss_idx, stride, mode, resave=True):
-    gloss_paths = []
-
+    end2end_video_out = []
+    gloss_lens = []
     s = 0
     p = stride // 2
 
@@ -28,84 +28,57 @@ def get_gloss_paths(images, pad_image, gloss_idx, stride, mode, resave=True):
 
         if e - s > stride or (mode == "2D" and e - s == stride):
             gloss_video_dir = os.path.join(GR_VIDEOS_DIR, str(gloss_idx))
-
+            gloss_images = images[s:e]
+            gloss_images_paths = []
             if resave:
-                gloss_images = images[s:e]
                 if os.path.exists(gloss_video_dir):
                     shutil.rmtree(gloss_video_dir)
 
                 if not os.path.exists(gloss_video_dir):
                     os.makedirs(gloss_video_dir)
 
-                for idx, image in enumerate(gloss_images):
-                    if not os.path.exists(os.path.join(gloss_video_dir, str(idx) + ".jpg")):
-                        cv2.imwrite(os.path.join(gloss_video_dir, str(idx) + ".jpg"), image)
+            for idx, image in enumerate(gloss_images):
+                gloss_image_path = os.path.join(gloss_video_dir, str(idx) + ".png")
+                gloss_images_paths.append(gloss_image_path)
+                if not os.path.exists(gloss_image_path):
+                    cv2.imwrite(gloss_image_path, image)
 
-            gloss_paths.append(os.path.join(str(gloss_idx), "*.jpg"))
+            end2end_video_out.append(gloss_images_paths)
+            gloss_lens.append(len(gloss_images_paths))
 
             gloss_idx += 1
 
         s += stride
 
-    return gloss_paths
+    return end2end_video_out, gloss_lens
 
 
-def shuffle_and_save_csv(out_all_paths, Y):
-    Y_gloss = [vocab.idx2gloss[i] for i in Y]
-    df = pd.DataFrame({"folder": out_all_paths, "gloss": Y_gloss, "gloss_idx": Y})
-
-    L = df.shape[0]
-    idxs = list(range(L))
+def shuffle_and_save_dataset(X, X_lens, Y):
+    data = {'X': X, 'X_lens': X_lens, 'Y': Y}
+    idxs = list(range(len(X)))
     np.random.shuffle(idxs)
-    df_train = df.iloc[idxs[:int(0.9 * L)]]
-    df_val = df.iloc[idxs[int(0.9 * L):]]
+    data["idxs"] = idxs
 
-    if not os.path.exists(GR_ANNO_DIR):
-        os.makedirs(GR_ANNO_DIR)
-
-    df_train.to_csv(os.path.join(GR_ANNO_DIR, "gloss_train.csv"), index=None)
-    df_val.to_csv(os.path.join(GR_ANNO_DIR, "gloss_val.csv"), index=None)
+    prefix_dir = os.path.join(GR_DATASET_DIR, "VARS")
+    if not os.path.exists(prefix_dir):
+        os.makedirs(prefix_dir)
+    data_path = os.path.join(prefix_dir, "data.pkl")
+    with open(data_path, 'wb') as f:
+        pickle.dump(data, f)
 
 
 def get_decoded_prediction(model, tensor_video, gt):
-    pred = model(tensor_video).squeeze(1).log_softmax(dim=1).argmax(dim=1).cpu().numpy()
-    pred = force_alignment(pred, gt)
-    glosses = []
-    for i in range(len(pred)):
-        gloss = pred[i]
-        glosses.append(gloss)
-    return glosses
+    with torch.no_grad():
+        pred = model(tensor_video).squeeze(1).log_softmax(dim=1).argmax(dim=1).cpu().numpy()
+        pred = force_alignment(pred, gt)
+        glosses = []
+        for i in range(len(pred)):
+            gloss = pred[i]
+            glosses.append(gloss)
+        return glosses
 
 
-def generate_gloss_dataset_with_only_feats(model, mode):
-    gr_out_dir = os.path.join(GR_ANNO_DIR, "GR_OUT")
-    gr_out_path = os.path.join(gr_out_dir, mode + ".bin")
-    if not os.path.exists(gr_out_path): return False
-
-    print("Generating based on existing Gloss Dataset")
-    with(open(gr_out_path, 'rb')) as f:
-        gr_out = pickle.load(f)
-
-    in_feats_paths = gr_out["in_feats_paths"]
-    out_glosses_paths = gr_out["out_glosses_paths"]
-    gts = gr_out["gts"]
-
-    Y = []
-    out_all_paths = []
-    for feat_path, annotation, out_video_paths in zip(in_feats_paths, gts, out_glosses_paths):
-        if not os.path.exists(feat_path):
-            print("ERROR")
-            exit(0)
-
-        tensor_video = torch.load(feat_path).unsqueeze(0).to(DEVICE)
-        Y += get_decoded_prediction(model, tensor_video, annotation)
-        out_all_paths += out_video_paths
-        assert (len(Y) == len(out_all_paths))
-
-    shuffle_and_save_csv(out_all_paths, Y)
-
-
-def generate_gloss_dataset(vocab, stf_type=STF_TYPE, use_feat=USE_ST_FEAT, resave=True):
+def generate_gloss_dataset(vocab, stf_type=STF_TYPE, use_feat=USE_ST_FEAT):
     print("Generation of the Gloss-Recognition Dataset")
     model, loaded = get_end2end_model(vocab, True, stf_type, use_feat)
 
@@ -117,70 +90,86 @@ def generate_gloss_dataset(vocab, stf_type=STF_TYPE, use_feat=USE_ST_FEAT, resav
 
     model.eval()
 
-    if use_feat and generate_gloss_dataset_with_only_feats(model, mode): exit(0)
-
     pad_image = 255 * np.ones((260, 210, 3)) * np.array([0.406, 0.485, 0.456])
 
     pad_image = pad_image.astype(np.uint8)
 
     temp_stride = 4
 
+    rerun_out_dir = os.path.join(GR_DATASET_DIR, "STF_RERUN")
+    rerun_out_path = os.path.join(rerun_out_dir, STF_MODEL + ".bin")
+
+    stf_rerun = use_feat and os.path.exists(rerun_out_path)
+
+    if stf_rerun:
+        with open(rerun_out_path, 'rb') as f:
+            feats_rerun_data = pickle.load(f)
+    else:
+        feats_rerun_data = {"frame_n": [], "video_out_paths": [], "gloss_lens": []}
+
     df = get_split_df("train")
     Y = []
-    out_all_paths = []
+    X = []
+    X_lens = []
 
-    gts = []
-    out_glosses_paths = []
-    in_feats_paths = []
-    with torch.no_grad():
+    pp = ProgressPrinter(df.shape[0], 5)
+    cur_n_gloss = 0
+    for idx in range(df.shape[0]):
+        row = df.iloc[idx]
+        video_path, feat_path = get_video_path(row, "train")
 
-        pp = ProgressPrinter(df.shape[0], 5)
-        cur_n_gloss = 0
+        if stf_rerun:
+            frame_n = feats_rerun_data["frame_n"][idx]
 
-        for idx in range(df.shape[0]):
-            row = df.iloc[idx]
-            video_path, feat_path = get_video_path(row, "train")
-            images = get_images(video_path)
-            if len(images) < 4:
+            if frame_n < temp_stride:
                 pp.omit()
                 continue
 
-            out_video_paths = get_gloss_paths(images, pad_image, cur_n_gloss, temp_stride, mode, resave)
-            out_all_paths += out_video_paths
+            video_out_paths = feats_rerun_data["video_out_paths"][idx]
+            gloss_lens = feats_rerun_data["gloss_lens"][idx]
 
-            if use_feat:
+            with torch.no_grad():
                 tensor_video = torch.load(feat_path).unsqueeze(0).to(DEVICE)
-            else:
-                tensor_video = get_tensor_video(images, preprocess_3d, mode).unsqueeze(0).to(DEVICE)
 
-            gt = vocab.encode(row.annotation)
-            Y += get_decoded_prediction(model, tensor_video, gt)
+        else:
+            images = get_images(video_path)
+            frame_n = len(images)
+            feats_rerun_data["frame_n"].append(frame_n)
 
-            gts.append(gt)
-            in_feats_paths.append(feat_path)
-            out_glosses_paths.append(out_video_paths)
+            if frame_n < temp_stride:
+                pp.omit()
+                feats_rerun_data["video_out_paths"].append([])
+                feats_rerun_data["gloss_lens"].append(0)
+                continue
 
-            assert (len(Y) == len(out_all_paths))
+            video_out_paths, gloss_lens = get_gloss_paths(images, pad_image, cur_n_gloss, temp_stride, mode)
+            feats_rerun_data["video_out_paths"].append(video_out_paths)
+            feats_rerun_data["gloss_lens"].append(gloss_lens)
 
-            cur_n_gloss = len(Y)
+            with torch.no_grad():
+                if use_feat:
+                    tensor_video = torch.load(feat_path).unsqueeze(0).to(DEVICE)
+                else:
+                    tensor_video = get_tensor_video(images, preprocess_3d, mode).unsqueeze(0).to(DEVICE)
 
-            if SHOW_PROGRESS:
-                pp.show(idx)
+        X += video_out_paths
+        X_lens += gloss_lens
+        Y += get_decoded_prediction(model, tensor_video, vocab.encode(row.annotation))
 
+        assert (len(Y) == len(X) == len(X_lens))
+
+        cur_n_gloss = len(X)
         if SHOW_PROGRESS:
-            pp.end()
+            pp.show(idx)
 
-    shuffle_and_save_csv(out_all_paths, Y)
-    if use_feat:
-        gr_out_dir = os.path.join(GR_ANNO_DIR, "GR_OUT")
-        gr_out_path = os.path.join(gr_out_dir, mode + ".bin")
-        gr_out = {"in_feats_paths": in_feats_paths,
-                  "out_glosses_paths": out_glosses_paths,
-                  "gts": gts}
+    shuffle_and_save_dataset(X, X_lens, Y)
+    if use_feat and not stf_rerun:
+        if not os.path.exists(rerun_out_dir): os.makedirs(rerun_out_dir)
+        with(open(rerun_out_path, 'wb')) as f:
+            pickle.dump(feats_rerun_data, f)
 
-        if not os.path.exists(gr_out_dir): os.makedirs(gr_out_dir)
-        with(open(gr_out_path, 'wb')) as f:
-            pickle.dump(gr_out, f)
+    if SHOW_PROGRESS:
+        pp.end()
 
 
 if __name__ == "__main__":
