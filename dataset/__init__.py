@@ -35,9 +35,9 @@ def get_end2end_datasets(model, vocab, include_test=False, load=True):
     return datasets
 
 
-def get_gr_datasets(load=False, batch_size=GR_BATCH_SIZE):
+def get_gr_datasets(batch_size=GR_BATCH_SIZE):
     datasets = dict()
-    datasets["Train"] = GR_dataset("train", load, batch_size)
-    datasets["Val"] = GR_dataset("val", load, batch_size)
+    datasets["Train"] = GR_dataset("train", batch_size)
+    datasets["Val"] = GR_dataset("val", batch_size)
 
     return datasets

@@ -54,10 +54,9 @@ def get_gloss_paths(images, pad_image, gloss_idx, stride, mode, resave=True):
 
 
 def shuffle_and_save_dataset(X, X_lens, Y):
-    data = {'X': X, 'X_lens': X_lens, 'Y': Y}
     idxs = list(range(len(X)))
     np.random.shuffle(idxs)
-    data["idxs"] = idxs
+    data = {'X': X, 'X_lens': X_lens, 'Y': Y, "idxs": idxs}
 
     prefix_dir = os.path.join(GR_DATASET_DIR, "VARS")
     if not os.path.exists(prefix_dir):
