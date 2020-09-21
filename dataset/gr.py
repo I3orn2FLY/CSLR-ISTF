@@ -4,6 +4,7 @@ import pickle
 import glob
 import cv2
 import torch
+import PIL
 import pandas as pd
 
 from utils import ProgressPrinter
@@ -11,10 +12,8 @@ from processing_tools import preprocess_3d, preprocess_2d
 from vocab import Vocab
 
 
-# TODO update GR dataset without csv files
-
 class GR_dataset():
-    def __init__(self, split, batch_size, stf_type=STF_TYPE):
+    def __init__(self, split, batch_size, stf_type=STF_TYPE, pil=False):
 
         self.batch_size = batch_size
         self.mean = np.array([0.43216, 0.394666, 0.37645], dtype=np.float32)
@@ -24,6 +23,8 @@ class GR_dataset():
 
         self.stf_type = stf_type
         self.load_dataset(split)
+
+        self.use_pil = pil
 
     def load_dataset(self, split):
         data_path = os.sep.join([GR_DATASET_DIR, "VARS", "data.pkl"])
@@ -51,10 +52,15 @@ class GR_dataset():
 
     def get_sample(self, i):
         y = self.Y[i]
-        image_files = self.X[i]
+        gloss_video_path = self.X[i]
         images = []
-        for img_file in image_files:
-            img = cv2.imread(img_file)
+        cap = cv2.VideoCapture(gloss_video_path)
+
+        while True:
+            ret, img = cap.read()
+            if not ret:
+                break
+
             h, w = img.shape[:2]
             y1, x1 = int(0.2 * np.random.rand() * h), int(0.2 * np.random.rand() * h)
             y2, x2 = h - int(0.2 * np.random.rand() * h), w - int(0.2 * np.random.rand() * h)
@@ -65,7 +71,9 @@ class GR_dataset():
                 img = preprocess_2d(img)
             images.append(img)
 
+        cap.release()
         x = np.stack(images)
+
         return x, y
 
     def start_epoch(self, shuffle=True):
@@ -97,6 +105,10 @@ class GR_dataset():
 
         if shuffle:
             np.random.shuffle(self.batches)
+
+        with open("../batches.bin", "wb") as f:
+            pickle.dump(self.batches, f)
+
         return len(self.batches)
 
     def get_batch(self, i):

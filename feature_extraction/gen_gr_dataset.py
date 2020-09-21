@@ -15,42 +15,52 @@ from processing_tools import get_tensor_video, get_images, preprocess_3d
 from vocab import Vocab, force_alignment
 
 
-def get_gloss_paths(images, pad_image, gloss_idx, stride, mode, resave=True):
-    end2end_video_out = []
-    gloss_lens = []
-    s = 0
+def pad_images(images, stride):
     p = stride // 2
+    pad_image = 255 * np.ones(images[0].shape) * np.array([0.406, 0.485, 0.456])
+    pad_image = pad_image.astype(np.uint8)
+    images = p * [pad_image] + images + p * [pad_image]
+    return images
 
-    if mode == "3D":
-        images = p * [pad_image] + images + p * [pad_image]
+
+def get_gloss_paths(images, gloss_idx, stride, mode):
+    gloss_paths = []
+    gloss_lens = []
+    shape = images[0].shape[:2][::-1]
+    four_cc = cv2.VideoWriter_fourcc(*"mp4v")
+    if mode == "3D":  images = pad_images(images, stride)
+
+    s = 0
     while s < len(images):
         e = min(len(images), s + 2 * stride)
 
         if e - s > stride or (mode == "2D" and e - s == stride):
-            gloss_video_dir = os.path.join(GR_VIDEOS_DIR, str(gloss_idx))
+            gloss_video_path = os.path.join(GR_VIDEOS_DIR, str(gloss_idx) + ".mp4")
+            rm_dir = os.path.join(GR_VIDEOS_DIR, str(gloss_idx))
+            if os.path.exists(rm_dir):
+                shutil.rmtree(rm_dir)
+
             gloss_images = images[s:e]
-            gloss_images_paths = []
-            if resave:
-                if os.path.exists(gloss_video_dir):
-                    shutil.rmtree(gloss_video_dir)
 
-                if not os.path.exists(gloss_video_dir):
-                    os.makedirs(gloss_video_dir)
+            if os.path.exists(gloss_video_path):
+                os.remove(gloss_video_path)
 
-            for idx, image in enumerate(gloss_images):
-                gloss_image_path = os.path.join(gloss_video_dir, str(idx) + ".png")
-                gloss_images_paths.append(gloss_image_path)
-                if not os.path.exists(gloss_image_path):
-                    cv2.imwrite(gloss_image_path, image)
+            if not os.path.exists(GR_VIDEOS_DIR):
+                os.makedirs(GR_VIDEOS_DIR)
 
-            end2end_video_out.append(gloss_images_paths)
-            gloss_lens.append(len(gloss_images_paths))
+            out_cap = cv2.VideoWriter(gloss_video_path, four_cc, 25.0, shape)
+            for image in gloss_images:
+                out_cap.write(image)
+            out_cap.release()
+
+            gloss_paths.append(gloss_video_path)
+            gloss_lens.append(len(gloss_images))
 
             gloss_idx += 1
 
         s += stride
 
-    return end2end_video_out, gloss_lens
+    return gloss_paths, gloss_lens
 
 
 def shuffle_and_save_dataset(X, X_lens, Y):
@@ -89,10 +99,6 @@ def generate_gloss_dataset(vocab, stf_type=STF_TYPE, use_feat=USE_ST_FEAT):
 
     model.eval()
 
-    pad_image = 255 * np.ones((260, 210, 3)) * np.array([0.406, 0.485, 0.456])
-
-    pad_image = pad_image.astype(np.uint8)
-
     temp_stride = 4
 
     rerun_out_dir = os.path.join(GR_DATASET_DIR, "STF_RERUN")
@@ -104,7 +110,7 @@ def generate_gloss_dataset(vocab, stf_type=STF_TYPE, use_feat=USE_ST_FEAT):
         with open(rerun_out_path, 'rb') as f:
             feats_rerun_data = pickle.load(f)
     else:
-        feats_rerun_data = {"frame_n": [], "video_out_paths": [], "gloss_lens": []}
+        feats_rerun_data = {"frame_n": [], "gloss_paths": [], "gloss_lens": []}
 
     df = get_split_df("train")
     Y = []
@@ -124,7 +130,7 @@ def generate_gloss_dataset(vocab, stf_type=STF_TYPE, use_feat=USE_ST_FEAT):
                 pp.omit()
                 continue
 
-            video_out_paths = feats_rerun_data["video_out_paths"][idx]
+            gloss_paths = feats_rerun_data["gloss_paths"][idx]
             gloss_lens = feats_rerun_data["gloss_lens"][idx]
 
             with torch.no_grad():
@@ -137,12 +143,12 @@ def generate_gloss_dataset(vocab, stf_type=STF_TYPE, use_feat=USE_ST_FEAT):
 
             if frame_n < temp_stride:
                 pp.omit()
-                feats_rerun_data["video_out_paths"].append([])
+                feats_rerun_data["gloss_paths"].append("")
                 feats_rerun_data["gloss_lens"].append(0)
                 continue
 
-            video_out_paths, gloss_lens = get_gloss_paths(images, pad_image, cur_n_gloss, temp_stride, mode)
-            feats_rerun_data["video_out_paths"].append(video_out_paths)
+            gloss_paths, gloss_lens = get_gloss_paths(images, cur_n_gloss, temp_stride, mode)
+            feats_rerun_data["gloss_paths"].append(gloss_paths)
             feats_rerun_data["gloss_lens"].append(gloss_lens)
 
             with torch.no_grad():
@@ -151,7 +157,7 @@ def generate_gloss_dataset(vocab, stf_type=STF_TYPE, use_feat=USE_ST_FEAT):
                 else:
                     tensor_video = get_tensor_video(images, preprocess_3d, mode).unsqueeze(0).to(DEVICE)
 
-        X += video_out_paths
+        X += gloss_paths
         X_lens += gloss_lens
         Y += get_decoded_prediction(model, tensor_video, vocab.encode(row.annotation))
 
