@@ -1,0 +1,4 @@
+*.pyc
+.idea
+config.py
+sandbox.py

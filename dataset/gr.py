@@ -13,7 +13,7 @@ from vocab import Vocab
 
 
 class GR_dataset():
-    def __init__(self, split, batch_size, stf_type=STF_TYPE, pil=False):
+    def __init__(self, split, batch_size, stf_type=STF_TYPE):
 
         self.batch_size = batch_size
         self.mean = np.array([0.43216, 0.394666, 0.37645], dtype=np.float32)
@@ -24,7 +24,7 @@ class GR_dataset():
         self.stf_type = stf_type
         self.load_dataset(split)
 
-        self.use_pil = pil
+
 
     def load_dataset(self, split):
         data_path = os.sep.join([GR_DATASET_DIR, "VARS", "data.pkl"])
@@ -106,9 +106,6 @@ class GR_dataset():
         if shuffle:
             np.random.shuffle(self.batches)
 
-        with open("../batches.bin", "wb") as f:
-            pickle.dump(self.batches, f)
-
         return len(self.batches)
 
     def get_batch(self, i):
@@ -134,7 +131,7 @@ class GR_dataset():
 
 if __name__ == "__main__":
     vocab = Vocab()
-    gr_train = GR_dataset("train", 64, 0)
+    gr_train = GR_dataset("train", 64, True)
 
     n = gr_train.start_epoch()
     X_batch, Y_batch = gr_train.get_batch(0)
