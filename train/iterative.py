@@ -6,6 +6,7 @@ import sys
 
 sys.path.append("..")
 from feature_extraction.stf_feats import generate_stf_feats
+from feature_extraction.img_feats import generate_img_feats
 from models import get_end2end_model, get_GR_model
 from dataset import get_gr_datasets, get_end2end_datasets
 from feature_extraction.gen_gr_dataset import generate_gloss_dataset
@@ -13,8 +14,8 @@ from train.end2end import train_end2end
 from train.gloss_recog import train_gloss_recog
 from vocab import Vocab
 from config import *
+from utils import check_stf_features
 
-# TODO test this
 torch.backends.cudnn.enabled = False
 
 
@@ -41,7 +42,6 @@ def create_iter_info(iter_idx):
     return {"Iter_idx": iter_idx, "GR_DATA_DONE": False,
             "GR_ACC": None, "GR_TRAIN_DONE": False,
             "STF_FEATS_DONE": False, "STF_WER": None,
-            "END2END_STF_TRAIN_DONE": False,
             "WER": None, "END2END_TRAIN_DONE": False}
 
 
@@ -67,16 +67,33 @@ if __name__ == "__main__":
             print("Iteration", iter_idx, "Started")
             iter_info = iter_info_list[iter_idx]
 
-            if iter_idx != 0:
+            if iter_idx == 0:
+                while not iter_info["END2END_TRAIN_DONE"]:
+                    if USE_ST_FEAT:
+                        if STF_TYPE == 0 and (not check_stf_features(img_feat=True)):
+                            generate_img_feats()
+
+                        if STF_TYPE == 1 and (not check_stf_features()):
+                            generate_stf_feats()
+
+                    model, _ = get_end2end_model(vocab, load_seq=False, stf_type=STF_TYPE, use_st_feat=USE_ST_FEAT)
+                    datasets = get_end2end_datasets(model, vocab)
+                    best_wer, finished = train_end2end(model, vocab, datasets, use_feat=USE_ST_FEAT)
+                    iter_info["WER"] = best_wer
+                    iter_info["END2END_TRAIN_DONE"] = finished
+                    save_iters_info(iter_info_list, iters_info_path)
+                    model = None
+                    torch.cuda.empty_cache()
+            else:
                 while not iter_info["GR_DATA_DONE"]:
-                    generate_gloss_dataset(vocab, use_feat=True)
+                    generate_gloss_dataset(vocab)
                     iter_info["GR_DATA_DONE"] = True
                     save_iters_info(iter_info_list, iters_info_path)
                     torch.cuda.empty_cache()
 
                 while not iter_info["GR_TRAIN_DONE"]:
                     model = get_GR_model(vocab)
-                    datasets = get_gr_datasets(load=True)
+                    datasets = get_gr_datasets()
                     gr_acc, finished = train_gloss_recog(model, datasets)
                     iter_info["GR_ACC"] = gr_acc
                     iter_info["GR_TRAIN_DONE"] = finished
@@ -90,28 +107,10 @@ if __name__ == "__main__":
                     save_iters_info(iter_info_list, iters_info_path)
                     torch.cuda.empty_cache()
 
-                while not iter_info["END2END_STF_TRAIN_DONE"]:
-                    datasets = get_end2end_datasets(vocab, use_feat=True)
-                    model, _ = get_end2end_model(vocab, True, STF_TYPE, True)
-                    best_wer, finished = train_end2end(model, vocab, datasets, use_feat=True)
-                    iter_info["STF_WER"] = best_wer
-                    iter_info["END2END_STF_TRAIN_DONE"] = finished
-                    save_iters_info(iter_info_list, iters_info_path)
-                    model = None
-                    torch.cuda.empty_cache()
-
-            else:
-                # TODO
-                # change it that we wont need to to train whole end2end model
                 while not iter_info["END2END_TRAIN_DONE"]:
-                    datasets = get_end2end_datasets(vocab, use_feat=False)
-
-                    if iter_info["WER"] is None and iter_idx == 0:
-                        model, _ = get_end2end_model(vocab, True, STF_TYPE, False)
-                    else:
-                        model, _ = get_end2end_model(vocab, True, STF_TYPE, False)
-
-                    best_wer, finished = train_end2end(model, vocab, datasets, use_feat=False)
+                    model, _ = get_end2end_model(vocab, load_seq=False, stf_type=STF_TYPE, use_st_feat=USE_ST_FEAT)
+                    datasets = get_end2end_datasets(model, vocab)
+                    best_wer, finished = train_end2end(model, vocab, datasets, use_feat=USE_ST_FEAT)
                     iter_info["WER"] = best_wer
                     iter_info["END2END_TRAIN_DONE"] = finished
                     save_iters_info(iter_info_list, iters_info_path)

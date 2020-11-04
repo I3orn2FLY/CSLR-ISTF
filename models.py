@@ -160,21 +160,20 @@ class STF_2D(nn.Module):
 # on 0th iter, when you dont load anything, and train whole network (maybe add load_stf extra var to config)
 def get_end2end_model(vocab, load_seq, stf_type, use_st_feat):
     print("Loading Model... ")
-    if use_st_feat and stf_type == 0:
-        if not check_stf_features(img_feat=False):
+    use_img_feat = False
+    if use_st_feat:
+        if not check_stf_features():
             print("Can not use ST features, they are missing!")
+
+            if stf_type == 1: exit(0)
+
             if check_stf_features(img_feat=True):
                 print("Initializing with Image_Features")
                 use_img_feat = True
                 use_st_feat = False
             else:
-                use_img_feat = False
-                print("Can not use Img features, they are missing! (that's it boy)")
+                print("Can not use img features, they are missing!")
                 exit(0)
-        else:
-            use_img_feat = False
-    else:
-        use_img_feat = False
 
     model = SLR(rnn_hidden=512, vocab_size=vocab.size,
                 use_st_feat=use_st_feat, use_img_feat=use_img_feat,
